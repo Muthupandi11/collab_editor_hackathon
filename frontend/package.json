@@ -16,11 +16,14 @@
 		"@tiptap/pm": "^2.6.6",
 		"@tiptap/react": "^2.6.6",
 		"@tiptap/starter-kit": "^2.6.6",
+		"lodash": "^4.17.21",
+		"lucide-react": "^1.7.0",
+		"nanoid": "^5.1.7",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
 		"socket.io-client": "^4.7.5",
-		"y-protocols": "^1.0.6",
 		"y-prosemirror": "^1.2.14",
+		"y-protocols": "^1.0.6",
 		"yjs": "^13.6.18"
 	},
 	"devDependencies": {

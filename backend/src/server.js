@@ -9,10 +9,24 @@ import { logError, logInfo } from "./utils/logger.js";
 const PORT = Number.parseInt(process.env.PORT || "4000", 10);
 
 const httpServer = createServer(app);
+// Dynamic CORS origins for Socket.IO
+const getAllowedOrigins = () => {
+	const origins = [
+		"http://localhost:5173",
+		"http://localhost:3000",
+		"http://localhost:5000"
+	];
+	if (process.env.FRONTEND_URL) {
+		origins.push(process.env.FRONTEND_URL);
+	}
+	return origins;
+};
+
 const io = new Server(httpServer, {
 	cors: {
-		origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
-		credentials: true
+		origin: getAllowedOrigins(),
+		credentials: true,
+		methods: ["GET", "POST"]
 	}
 });
 

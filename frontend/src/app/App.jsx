@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import AppLayout from "../components/layout/AppLayout.jsx";
 import EditorPage from "../pages/EditorPage.jsx";
 import { getColorBySeed } from "../lib/colors.js";
+import { useEffect } from "react";
+import { startKeepAlive } from "../utils/keepAlive.js";
 
 /**
  * Parses URL path to fetch document room ID.
@@ -32,6 +34,11 @@ export default function App() {
 			name,
 			color: getColorBySeed(name)
 		};
+	}, []);
+	
+	useEffect(() => {
+		const cleanup = startKeepAlive();
+		return cleanup;
 	}, []);
 
 	return (

@@ -146,3 +146,49 @@ export async function restoreRevision(documentId, revisionId, restoredBy = "syst
 	await doc.save();
 	return snapshot;
 }
+
+/**
+ * Get revisions for a document (wrapper for listRevisions)
+ * @param {string} documentId - Unique document room identifier.
+ * @param {number} [limit=20] - Maximum number of revisions to return.
+ * @returns {Promise<Array>} Array of revision metadata sorted by newest first.
+ */
+export async function getRevisions(documentId, limit = 20) {
+	return listRevisions(documentId, limit);
+}
+
+/**
+ * Save a new revision from HTML content
+ * @param {string} documentId - Unique document room identifier.
+ * @param {string} content - Plain text or HTML content being saved.
+ * @param {string} author - Author name/username making the save.
+ * @returns {Promise<Object>} Created revision object with _id, createdAt, createdBy, summary.
+ */
+export async function saveRevision(documentId, content, author = "Unknown") {
+	try {
+		// Create a buffer from the content string (simplified serialization)
+		// In production, you'd want to encode this as Yjs binary
+		const snapshot = Buffer.from(JSON.stringify({ content }));
+		
+		const result = await appendRevision(documentId, {
+			snapshot,
+			createdBy: author,
+			summary: `Saved by ${author}` 
+		});
+
+		// Return the latest revision metadata
+		if (result && result.revisions && result.revisions.length > 0) {
+			const latest = result.revisions[result.revisions.length - 1];
+			return {
+				_id: latest._id,
+				createdAt: latest.createdAt,
+				createdBy: latest.createdBy,
+				summary: latest.summary
+			};
+		}
+		
+		return null;
+	} catch (error) {
+		throw new Error(`Failed to save revision: ${error.message}`);
+	}
+}
