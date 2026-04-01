@@ -45,23 +45,53 @@ export function useCollaboration({ documentId, currentUser }) {
 	const ydoc = useMemo(() => new Y.Doc(), []);
 	const awareness = useMemo(() => new Awareness(ydoc), [ydoc]);
 	const socketRef = useRef(null);
+	const typingStopTimerRef = useRef(null);
+	const titleEmitRef = useRef(() => {});
 	const [ready, setReady] = useState(false);
+	const [connectionStatus, setConnectionStatus] = useState("connecting");
+	const [saveStatus, setSaveStatus] = useState("idle");
+	const [typingUsers, setTypingUsers] = useState([]);
+	const [documentTitle, setDocumentTitle] = useState("Untitled Document");
 	const [onlineUsers, setOnlineUsers] = useState([]);
 
 	useEffect(() => {
 		const socket = createSocketClient();
 		socketRef.current = socket;
+		setConnectionStatus("connecting");
+
+		const debouncedTitleEmit = debounce((title) => {
+			if (!socket.connected) {
+				return;
+			}
+			socket.emit("title-change", {
+				roomId: documentId,
+				title,
+				updatedBy: currentUser.name
+			});
+		}, 500);
+		titleEmitRef.current = debouncedTitleEmit;
 
 		// Create debounced emit for Yjs updates (250ms debounce)
 		const debouncedEmitUpdate = debounce(
 			(update) => {
 				if (!socket.connected) {
+					setSaveStatus("error");
 					return;
 				}
+				setSaveStatus("saving");
 				socket.emit("yjs-update", { 
 					documentId, 
 					update: Array.from(update),
 					timestamp: Date.now()
+				}, (response) => {
+					if (response?.ok) {
+						setSaveStatus("saved");
+						setTimeout(() => {
+							setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+						}, 1200);
+						return;
+					}
+					setSaveStatus("error");
 				});
 			},
 			250,
@@ -139,10 +169,41 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		const handleDisconnect = () => {
 			setReady(false);
+			setConnectionStatus("disconnected");
+			setSaveStatus((prev) => (prev === "saving" ? "error" : prev));
+		};
+
+		const handleConnectError = () => {
+			setConnectionStatus("disconnected");
 		};
 
 		const handleDocumentRestored = () => {
 			window.location.reload();
+		};
+
+		const handleTypingStart = ({ userId, username }) => {
+			if (!userId || !username) {
+				return;
+			}
+			setTypingUsers((prev) => {
+				if (prev.some((entry) => entry.userId === userId)) {
+					return prev;
+				}
+				return [...prev, { userId, username }];
+			});
+		};
+
+		const handleTypingStop = ({ userId }) => {
+			if (!userId) {
+				return;
+			}
+			setTypingUsers((prev) => prev.filter((entry) => entry.userId !== userId));
+		};
+
+		const handleTitleUpdated = ({ title }) => {
+			const nextTitle = title || "Untitled Document";
+			setDocumentTitle(nextTitle);
+			document.title = `${nextTitle} - CollabEditor`;
 		};
 
 		socket.on("connect", () => {
@@ -163,9 +224,14 @@ export function useCollaboration({ documentId, currentUser }) {
 			pushAwarenessList();
 
 			setReady(true);
+			setConnectionStatus("connected");
 		});
 		socket.on("disconnect", handleDisconnect);
+		socket.on("connect_error", handleConnectError);
 		socket.on("document-restored", handleDocumentRestored);
+		socket.on("user-typing", handleTypingStart);
+		socket.on("user-stopped-typing", handleTypingStop);
+		socket.on("title-updated", handleTitleUpdated);
 
 		socket.on("document-state", handleRemoteYjsUpdate);
 		socket.on("yjs-update", handleRemoteYjsUpdate);
@@ -180,12 +246,60 @@ export function useCollaboration({ documentId, currentUser }) {
 			ydoc.off("update", handleLocalYjsUpdate);
 			awareness.setLocalState(null);
 			socket.off("disconnect", handleDisconnect);
+			socket.off("connect_error", handleConnectError);
 			socket.off("document-restored", handleDocumentRestored);
+			socket.off("user-typing", handleTypingStart);
+			socket.off("user-stopped-typing", handleTypingStop);
+			socket.off("title-updated", handleTitleUpdated);
 			socket.disconnect();
 			socketRef.current = null;
 			debouncedEmitUpdate.cancel();
+			debouncedTitleEmit.cancel();
+			if (typingStopTimerRef.current) {
+				clearTimeout(typingStopTimerRef.current);
+				typingStopTimerRef.current = null;
+			}
 		};
 	}, [awareness, currentUser, documentId, ydoc]);
+
+	/**
+	 * Signals typing state to collaborators with a 2-second inactivity timeout.
+	 * @returns {void}
+	 */
+	function notifyTyping() {
+		if (!socketRef.current?.connected) {
+			return;
+		}
+
+		socketRef.current.emit("typing-start", {
+			roomId: documentId,
+			userId: awareness.clientID,
+			username: currentUser.name
+		});
+
+		if (typingStopTimerRef.current) {
+			clearTimeout(typingStopTimerRef.current);
+		}
+
+		typingStopTimerRef.current = setTimeout(() => {
+			socketRef.current?.emit("typing-stop", {
+				roomId: documentId,
+				userId: awareness.clientID
+			});
+		}, 2000);
+	}
+
+	/**
+	 * Updates title locally and syncs with collaborators.
+	 * @param {string} nextTitle - New document title.
+	 * @returns {void}
+	 */
+	function updateDocumentTitle(nextTitle) {
+		const title = (nextTitle || "").trim() || "Untitled Document";
+		setDocumentTitle(title);
+		document.title = `${title} - CollabEditor`;
+		titleEmitRef.current(title);
+	}
 
 	/**
 	 * Requests a server-side restore to a selected revision.
@@ -221,7 +335,13 @@ export function useCollaboration({ documentId, currentUser }) {
 		ydoc,
 		awareness,
 		ready,
+		connectionStatus,
+		saveStatus,
+		typingUsers,
+		documentTitle,
 		onlineUsers,
+		notifyTyping,
+		updateDocumentTitle,
 		requestRevisionRestore
 	};
 }

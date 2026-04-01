@@ -8,6 +8,8 @@ import { logInfo } from "../utils/logger.js";
 /** @type {Map<string, { doc: Y.Doc, awareness: Awareness, clients: Set<string>, snapshotWorker?: { stop: () => void } }>} */
 const rooms = new Map();
 const roomHydrationJobs = new Map();
+const roomTitles = new Map();
+const roomTyping = new Map();
 
 /**
  * Returns an existing room or creates a new in-memory room.
@@ -58,6 +60,8 @@ function cleanupRoomIfEmpty(documentId) {
 	room.doc.destroy();
 	room.snapshotWorker?.stop();
 	rooms.delete(documentId);
+	roomTitles.delete(documentId);
+	roomTyping.delete(documentId);
 	logInfo("Room cleaned up", { documentId });
 }
 
@@ -97,12 +101,19 @@ export function registerCollaborationSocket(io) {
 				([clientId, state]) => ({ clientId, state })
 			);
 			socket.emit("presence-state", awarenessClients);
+			socket.emit("title-updated", {
+				documentId,
+				title: roomTitles.get(documentId) || "Untitled Document"
+			});
 
 			logInfo("Joined document room", { documentId, socketId: socket.id });
 		});
 
-		socket.on("yjs-update", ({ documentId, update }) => {
+		socket.on("yjs-update", ({ documentId, update }, ack) => {
 			if (!documentId || !update) {
+				if (typeof ack === "function") {
+					ack({ ok: false, message: "documentId and update are required" });
+				}
 				return;
 			}
 
@@ -111,6 +122,10 @@ export function registerCollaborationSocket(io) {
 
 			Y.applyUpdate(room.doc, payload);
 			socket.to(documentId).emit("yjs-update", payload);
+
+			if (typeof ack === "function") {
+				ack({ ok: true, receivedAt: Date.now() });
+			}
 		});
 
 		socket.on("awareness-update", ({ documentId, update, clientId }) => {
@@ -127,6 +142,61 @@ export function registerCollaborationSocket(io) {
 
 			awarenessProtocol.applyAwarenessUpdate(room.awareness, payload, socket.id);
 			socket.to(documentId).emit("awareness-update", payload);
+		});
+
+		socket.on("typing-start", ({ roomId, userId, username }) => {
+			if (!roomId || !userId) {
+				return;
+			}
+
+			const roomUsers = roomTyping.get(roomId) || new Map();
+			const existing = roomUsers.get(userId);
+			if (existing?.timeout) {
+				clearTimeout(existing.timeout);
+			}
+
+			const timeout = setTimeout(() => {
+				const nextRoomUsers = roomTyping.get(roomId);
+				nextRoomUsers?.delete(userId);
+				socket.to(roomId).emit("user-stopped-typing", { roomId, userId });
+			}, 3000);
+
+			roomUsers.set(userId, { username: username || "Someone", timeout });
+			roomTyping.set(roomId, roomUsers);
+			socket.to(roomId).emit("user-typing", { roomId, userId, username: username || "Someone" });
+		});
+
+		socket.on("typing-stop", ({ roomId, userId }) => {
+			if (!roomId || !userId) {
+				return;
+			}
+
+			const roomUsers = roomTyping.get(roomId);
+			const entry = roomUsers?.get(userId);
+			if (entry?.timeout) {
+				clearTimeout(entry.timeout);
+			}
+			roomUsers?.delete(userId);
+			socket.to(roomId).emit("user-stopped-typing", { roomId, userId });
+		});
+
+		socket.on("title-change", async ({ roomId, title, updatedBy }) => {
+			if (!roomId || typeof title !== "string") {
+				return;
+			}
+
+			const nextTitle = title.trim() || "Untitled Document";
+			roomTitles.set(roomId, nextTitle);
+			socket.to(roomId).emit("title-updated", { roomId, title: nextTitle });
+
+			try {
+				await upsertDocument(roomId, {
+					title: nextTitle,
+					updatedBy: updatedBy || socket.data?.user?.name || "anonymous"
+				});
+			} catch {
+				// Do not interrupt live editing if metadata persistence fails.
+			}
 		});
 
 			socket.on("restore-document", async ({ documentId, revisionId, restoredBy }, ack) => {

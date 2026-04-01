@@ -44,8 +44,18 @@ router.post("/", async (req, res) => {
 router.post("/restore/:revisionId", async (req, res) => {
 	try {
 		const { revisionId } = req.params;
-		const revision = await revisionService.restoreRevision(revisionId);
-		res.json(revision);
+		const { docId, restoredBy } = req.body;
+
+		if (!docId) {
+			return res.status(400).json({ error: "docId is required" });
+		}
+
+		const snapshot = await revisionService.restoreRevision(docId, revisionId, restoredBy || "system");
+		if (!snapshot) {
+			return res.status(404).json({ error: "Revision not found" });
+		}
+
+		res.json({ ok: true, revisionId, docId });
 	} catch (error) {
 		res.status(500).json({ error: error.message });
 	}

@@ -1,4 +1,7 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:4000";
 
 /**
  * Fetches revision history for a document.
@@ -6,7 +9,9 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
  * @returns {Promise<Array<{ _id: string, createdAt: string, createdBy: string, summary: string }>>}
  */
 export async function fetchRevisions(documentId) {
-  const response = await fetch(`${API_URL}/api/documents/${documentId}/revisions`);
+  const response = await fetch(`${API_URL}/api/documents/${documentId}/revisions`, {
+		credentials: "include"
+	});
   if (!response.ok) {
     throw new Error(`Failed to fetch revisions (${response.status})`);
   }

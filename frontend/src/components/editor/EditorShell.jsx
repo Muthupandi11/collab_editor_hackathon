@@ -7,15 +7,21 @@ import Toolbar from "./Toolbar.jsx";
 
 /**
  * Renders the collaborative TipTap editor and formatting toolbar.
- * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean }} props - Editor props.
+ * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean, onTyping?: () => void, onTextStatsChange?: (payload: { words: number, characters: number }) => void }} props - Editor props.
  * @returns {JSX.Element}
  */
-export default function EditorShell({ ydoc, awareness, currentUser, ready }) {
+export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange }) {
 	const editor = useEditor({
 		editorProps: {
 			attributes: {
 				class: "editor-content"
 			}
+		},
+		onUpdate: ({ editor: current }) => {
+			onTyping?.();
+			const text = current.getText() || "";
+			const words = text.trim().length > 0 ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+			onTextStatsChange?.({ words, characters: text.length });
 		},
 		extensions: [
 			StarterKit.configure({ history: false }),
@@ -36,11 +42,11 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready }) {
 	});
 
 	return (
-		<section className="editor-panel">
+		<>
 			<Toolbar editor={editor} ready={ready} />
 			<div className="editor-card">
 				<EditorContent editor={editor} />
 			</div>
-		</section>
+		</>
 	);
 }

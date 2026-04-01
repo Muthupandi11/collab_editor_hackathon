@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import EditorShell from "../components/editor/EditorShell.jsx";
 import RevisionHistory from "../components/editor/RevisionHistory.jsx";
 import PresenceList from "../components/presence/PresenceList.jsx";
@@ -11,10 +11,23 @@ import { fetchRevisions } from "../services/apiClient.js";
  * @returns {JSX.Element}
  */
 export default function EditorPage({ documentId, currentUser }) {
-	const { ydoc, awareness, ready, onlineUsers, requestRevisionRestore } = useCollaboration({
+	const {
+		ydoc,
+		awareness,
+		ready,
+		onlineUsers,
+		requestRevisionRestore,
+		notifyTyping,
+		typingUsers,
+		saveStatus,
+		connectionStatus,
+		documentTitle,
+		updateDocumentTitle
+	} = useCollaboration({
 		documentId,
 		currentUser
 	});
+	const [textStats, setTextStats] = useState({ words: 0, characters: 0 });
 	const [revisions, setRevisions] = useState([]);
 	const [loadingRevisions, setLoadingRevisions] = useState(true);
 	const [revisionError, setRevisionError] = useState("");
@@ -40,7 +53,7 @@ export default function EditorPage({ documentId, currentUser }) {
 	useEffect(() => {
 		const timer = setInterval(() => {
 			loadRevisions();
-		}, 15000);
+		}, 30000);
 
 		return () => {
 			clearInterval(timer);
@@ -65,9 +78,52 @@ export default function EditorPage({ documentId, currentUser }) {
 		[requestRevisionRestore]
 	);
 
+	const typingLabel = useMemo(() => {
+		if (typingUsers.length === 0) {
+			return "";
+		}
+		if (typingUsers.length === 1) {
+			return `${typingUsers[0].username} is typing...`;
+		}
+		return `${typingUsers[0].username} and ${typingUsers.length - 1} others are typing...`;
+	}, [typingUsers]);
+
 	return (
 		<div className="editor-grid">
-			<EditorShell ydoc={ydoc} awareness={awareness} currentUser={currentUser} ready={ready} />
+			<section className="editor-panel">
+				<div className="editor-title-row">
+					<input
+						type="text"
+						value={documentTitle}
+						onChange={(event) => updateDocumentTitle(event.target.value)}
+						placeholder="Untitled Document"
+						className="title-input"
+					/>
+					<span className={connectionStatus === "connected" ? "toolbar-status connected" : "toolbar-status"}>
+						<span className="status-dot" />
+						{connectionStatus === "connected" ? "Live" : connectionStatus === "connecting" ? "Connecting" : "Offline"}
+					</span>
+				</div>
+				<EditorShell
+					ydoc={ydoc}
+					awareness={awareness}
+					currentUser={currentUser}
+					ready={ready}
+					onTyping={notifyTyping}
+					onTextStatsChange={setTextStats}
+				/>
+				<div className="bottom-bar">
+					<span>
+						{textStats.words} words · {textStats.characters} characters
+					</span>
+					<span>{typingLabel || ""}</span>
+					<span>
+						{saveStatus === "saving" ? "Saving..." : ""}
+						{saveStatus === "saved" ? "Saved ✓" : ""}
+						{saveStatus === "error" ? "Unsaved changes ⚠" : ""}
+					</span>
+				</div>
+			</section>
 			<div className="sidebar-stack">
 				<PresenceList users={onlineUsers} />
 				<RevisionHistory

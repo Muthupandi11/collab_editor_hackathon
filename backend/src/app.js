@@ -16,8 +16,12 @@ const getAllowedOrigins = () => {
 	if (process.env.FRONTEND_URL) {
 		origins.push(process.env.FRONTEND_URL);
 	}
+
+	if (process.env.CLIENT_ORIGIN) {
+		origins.push(process.env.CLIENT_ORIGIN);
+	}
 	
-	return origins;
+	return [...new Set(origins)];
 };
 
 const corsOptions = {
@@ -37,7 +41,7 @@ const corsOptions = {
 
 // CORS middleware FIRST before all routes
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options("*", cors());
 
 app.use(express.json({ limit: "1mb" }));
 

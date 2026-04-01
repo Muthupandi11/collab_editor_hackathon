@@ -4,17 +4,25 @@ import EditorPage from "../pages/EditorPage.jsx";
 import { getColorBySeed } from "../lib/colors.js";
 import { useEffect } from "react";
 import { startKeepAlive } from "../utils/keepAlive.js";
+import { nanoid } from "nanoid";
 
 /**
  * Parses URL path to fetch document room ID.
  * @returns {string}
  */
 function resolveDocumentIdFromLocation() {
-	const segments = window.location.pathname.split("/").filter(Boolean);
-	if (segments[0] === "doc" && segments[1]) {
-		return segments[1];
+	const params = new URLSearchParams(window.location.search);
+	const room = params.get("room");
+
+	if (room && room.trim()) {
+		return room.trim();
 	}
-	return "demo-room";
+
+	const generatedRoom = nanoid(8);
+	params.set("room", generatedRoom);
+	const nextUrl = `${window.location.pathname}?${params.toString()}`;
+	window.history.replaceState({}, "", nextUrl);
+	return generatedRoom;
 }
 
 /**
