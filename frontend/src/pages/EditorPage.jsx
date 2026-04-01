@@ -24,6 +24,7 @@ export default function EditorPage({ documentId, currentUser }) {
 		connectionStatus,
 		connectionMessage,
 		retryIn,
+		latency,
 		documentTitle,
 		updateDocumentTitle,
 		retryConnection
@@ -32,6 +33,9 @@ export default function EditorPage({ documentId, currentUser }) {
 		currentUser
 	});
 	const [title, setTitle] = useState(documentTitle);
+	const [editorText, setEditorText] = useState("");
+	const [draftToApply, setDraftToApply] = useState(null);
+	const [draftPrompted, setDraftPrompted] = useState(false);
 	const [textStats, setTextStats] = useState({ words: 0, characters: 0 });
 	const [revisions, setRevisions] = useState([]);
 	const [loadingRevisions, setLoadingRevisions] = useState(true);
@@ -59,6 +63,43 @@ export default function EditorPage({ documentId, currentUser }) {
 	useEffect(() => {
 		setTitle(documentTitle);
 	}, [documentTitle]);
+
+	useEffect(() => {
+		const userCount = onlineUsers.length;
+		const docTitle = title || "Untitled Document";
+		document.title =
+			userCount > 1
+				? `${docTitle} (${userCount} online) - CollabEditor`
+				: `${docTitle} - CollabEditor`;
+	}, [onlineUsers.length, title]);
+
+	useEffect(() => {
+		if (connectionStatus !== "offline") {
+			return;
+		}
+		if (!editorText.trim()) {
+			return;
+		}
+		localStorage.setItem("collab_offline_draft", editorText);
+	}, [connectionStatus, editorText]);
+
+	useEffect(() => {
+		if (connectionStatus !== "connected" || draftPrompted) {
+			return;
+		}
+
+		const offlineDraft = localStorage.getItem("collab_offline_draft");
+		if (!offlineDraft || !offlineDraft.trim()) {
+			return;
+		}
+
+		setDraftPrompted(true);
+		const shouldSync = window.confirm("You have unsaved changes. Sync now?");
+		if (shouldSync) {
+			setDraftToApply(offlineDraft);
+			return;
+		}
+	}, [connectionStatus, draftPrompted]);
 
 	useEffect(() => {
 		const timer = setInterval(() => {
@@ -109,11 +150,23 @@ export default function EditorPage({ documentId, currentUser }) {
 					? "Unsaved changes ⚠"
 					: "";
 
-	const isOffline = connectionStatus === "disconnected";
+	const isOffline = connectionStatus === "offline";
+	const latencyTone =
+		latency == null ? "text-gray-400 dark:text-gray-500" : latency < 100 ? "text-green-500" : latency < 300 ? "text-amber-500" : "text-red-500";
 
 	return (
 		<div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4">
 			<section className="min-w-0">
+			{connectionStatus === "waking" ? (
+				<div className="w-full bg-blue-50 border-b border-blue-200 px-4 py-2 text-sm text-blue-700 text-center rounded-lg mb-2">
+					Server is waking up on Render free tier - this takes 30-60 seconds. Please wait, connection will establish automatically.
+				</div>
+			) : null}
+			{connectionStatus === "offline" ? (
+				<div className="w-full bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-700 text-center rounded-lg mb-2">
+					You are offline - changes saved locally.
+				</div>
+			) : null}
 				<div className="flex items-center gap-3 mb-3">
 					<input
 						type="text"
@@ -143,7 +196,7 @@ export default function EditorPage({ documentId, currentUser }) {
 							</span>
 						</div>
 					) : null}
-					{connectionStatus === "disconnected" ? (
+					{connectionStatus === "offline" ? (
 						<div className="flex items-center gap-2 px-3 py-1 bg-red-50 dark:bg-red-900/30 rounded-full border border-red-200 dark:border-red-800">
 							<span className="w-2 h-2 bg-red-500 rounded-full" />
 							<span className="text-xs font-medium text-red-700 dark:text-red-400">Offline</span>
@@ -160,14 +213,22 @@ export default function EditorPage({ documentId, currentUser }) {
 					ready={ready}
 					onTyping={notifyTyping}
 					onTextStatsChange={setTextStats}
+					onPlainTextChange={setEditorText}
+					draftToApply={draftToApply}
+					onDraftApplied={() => {
+						localStorage.removeItem("collab_offline_draft");
+						setDraftToApply(null);
+						toast.success("Offline draft synced");
+					}}
 				/>
 				<div className="flex justify-between items-center px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
 					<span className="min-w-[140px]">
 						{textStats.words} words · {textStats.characters} characters
 					</span>
 					<span className="flex-1 text-center">{typingLabel || ""}</span>
-					<span className="min-w-[150px] text-right text-green-600 dark:text-green-400">
+					<span className="min-w-[180px] text-right text-green-600 dark:text-green-400">
 						{saveLabel}
+						{latency != null ? <span className={`ml-2 ${latencyTone}`}>{latency}ms</span> : null}
 					</span>
 				</div>
 			</section>

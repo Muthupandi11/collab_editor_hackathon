@@ -48,11 +48,14 @@ export function useCollaboration({ documentId, currentUser }) {
 	const typingStopTimerRef = useRef(null);
 	const retryCountdownRef = useRef(null);
 	const wakeupTimerRef = useRef(null);
+	const latencyIntervalRef = useRef(null);
 	const titleEmitRef = useRef(() => {});
 	const [ready, setReady] = useState(false);
-	const [connectionStatus, setConnectionStatus] = useState("connecting");
+	const [connectionStatus, setConnectionStatus] = useState("connecting"); // connecting | connected | offline | waking
 	const [connectionMessage, setConnectionMessage] = useState("Connecting...");
 	const [retryIn, setRetryIn] = useState(0);
+	const [attempt, setAttempt] = useState(0);
+	const [latency, setLatency] = useState(null);
 	const [saveStatus, setSaveStatus] = useState("idle");
 	const [typingUsers, setTypingUsers] = useState([]);
 	const [documentTitle, setDocumentTitle] = useState("Untitled Document");
@@ -85,6 +88,7 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		wakeupTimerRef.current = setTimeout(() => {
 			if (!socket.connected) {
+				setConnectionStatus("waking");
 				setConnectionMessage("Waking up server...");
 			}
 		}, 5000);
@@ -199,25 +203,30 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		const handleDisconnect = () => {
 			setReady(false);
-			setConnectionStatus("disconnected");
+			setConnectionStatus("offline");
 			setConnectionMessage("Offline");
 			setSaveStatus((prev) => (prev === "saving" ? "error" : prev));
+			if (latencyIntervalRef.current) {
+				clearInterval(latencyIntervalRef.current);
+				latencyIntervalRef.current = null;
+			}
 		};
 
 		const handleConnectError = () => {
-			setConnectionStatus("connecting");
-			setConnectionMessage("Waking up server...");
+			setConnectionStatus("waking");
+			setConnectionMessage("Waking up server (30-60s)...");
 		};
 
-		const handleReconnectAttempt = () => {
+		const handleReconnectAttempt = (nextAttempt) => {
 			setConnectionStatus("connecting");
-			setConnectionMessage("Retrying...");
+			setAttempt(nextAttempt || 0);
+			setConnectionMessage(`Reconnecting... (${nextAttempt || 0}/15)`);
 			startRetryCountdown(2);
 		};
 
 		const handleReconnectFailed = () => {
-			setConnectionStatus("disconnected");
-			setConnectionMessage("Offline");
+			setConnectionStatus("offline");
+			setConnectionMessage("Connection failed. Click to retry.");
 		};
 
 		const handleDocumentRestored = () => {
@@ -270,6 +279,18 @@ export function useCollaboration({ documentId, currentUser }) {
 			setConnectionStatus("connected");
 			setConnectionMessage("Live");
 			setRetryIn(0);
+			setAttempt(0);
+
+			if (latencyIntervalRef.current) {
+				clearInterval(latencyIntervalRef.current);
+			}
+			latencyIntervalRef.current = setInterval(() => {
+				const start = Date.now();
+				socket.emit("ping-latency", () => {
+					setLatency(Date.now() - start);
+				});
+			}, 10000);
+
 			if (retryCountdownRef.current) {
 				clearInterval(retryCountdownRef.current);
 				retryCountdownRef.current = null;
@@ -323,6 +344,10 @@ export function useCollaboration({ documentId, currentUser }) {
 			if (wakeupTimerRef.current) {
 				clearTimeout(wakeupTimerRef.current);
 				wakeupTimerRef.current = null;
+			}
+			if (latencyIntervalRef.current) {
+				clearInterval(latencyIntervalRef.current);
+				latencyIntervalRef.current = null;
 			}
 		};
 	}, [awareness, currentUser, documentId, ydoc]);
@@ -416,6 +441,8 @@ export function useCollaboration({ documentId, currentUser }) {
 		connectionStatus,
 		connectionMessage,
 		retryIn,
+		attempt,
+		latency,
 		saveStatus,
 		typingUsers,
 		documentTitle,

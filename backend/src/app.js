@@ -41,12 +41,17 @@ const corsOptions = {
 
 // CORS middleware FIRST before all routes
 app.use(cors(corsOptions));
-app.options("*", cors());
+app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/", (_req, res) => {
-	res.status(200).json({ status: "ok", service: "collab-editor-backend" });
+	res.status(200).json({
+		status: "ok",
+		message: "Collab Editor Backend Running",
+		timestamp: new Date().toISOString(),
+		uptime: process.uptime()
+	});
 });
 
 app.get("/ping", (_req, res) => {
@@ -57,10 +62,11 @@ app.get("/health", async (_req, res) => {
 	try {
 		const { connection } = await import("mongoose");
 		const isConnected = connection.readyState === 1;
-		res.status(200).json({ 
-			status: isConnected ? "healthy" : "unhealthy",
-			database: isConnected ? "connected" : "disconnected",
-			time: Date.now()
+		res.status(200).json({
+			status: "healthy",
+			mongodb: isConnected ? "connected" : "disconnected",
+			timestamp: new Date().toISOString(),
+			uptime: process.uptime()
 		});
 	} catch (error) {
 		res.status(503).json({ 

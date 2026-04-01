@@ -75,6 +75,12 @@ export function registerCollaborationSocket(io) {
 		socket.data.awarenessClientIds = new Set();
 		logInfo("Socket connected", { socketId: socket.id });
 
+		socket.on("ping-latency", (ack) => {
+			if (typeof ack === "function") {
+				ack();
+			}
+		});
+
 		socket.on("join-document", ({ documentId, user }) => {
 			if (!documentId) {
 				return;

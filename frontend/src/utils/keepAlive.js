@@ -1,6 +1,3 @@
-/** @type {string} Backend URL for pinging */
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
-
 /** @type {number | null} Interval ID for the keep-alive timer */
 let keepAliveInterval = null;
 
@@ -8,15 +5,18 @@ let keepAliveInterval = null;
  * Start a keep-alive ping to prevent Render backend from cold-starting
  * Pings the /ping endpoint every 14 minutes
  * 
+ * @param {string} backendUrl - Backend base URL.
  * @returns {Function} Cleanup function to stop the keep-alive
  */
-export const startKeepAlive = () => {
+export const startKeepAlive = (backendUrl) => {
+	const url = backendUrl || import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+
 	// Ping immediately on startup
-	pingBackend();
+	pingBackend(url);
 
 	// Then ping every 14 minutes (840000ms) to keep instance warm
 	keepAliveInterval = setInterval(() => {
-		pingBackend();
+		pingBackend(url);
 	}, 840000);
 
 	// Return cleanup function
@@ -34,9 +34,9 @@ export const startKeepAlive = () => {
  * 
  * @private
  */
-const pingBackend = async () => {
+const pingBackend = async (backendUrl) => {
 	try {
-		const response = await fetch(`${BACKEND_URL}/ping`, {
+		const response = await fetch(`${backendUrl}/ping`, {
 			method: "GET",
 			signal: AbortSignal.timeout(5000) // 5 second timeout
 		});

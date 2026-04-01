@@ -46,7 +46,7 @@ export default function App() {
 	}, []);
 	
 	useEffect(() => {
-		const cleanup = startKeepAlive();
+		const cleanup = startKeepAlive(import.meta.env.VITE_BACKEND_URL);
 		return cleanup;
 	}, []);
 

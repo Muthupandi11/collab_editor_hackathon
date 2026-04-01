@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -8,10 +8,10 @@ import Toolbar from "./Toolbar.jsx";
 
 /**
  * Renders the collaborative TipTap editor and formatting toolbar.
- * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean, onTyping?: () => void, onTextStatsChange?: (payload: { words: number, characters: number }) => void }} props - Editor props.
+ * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean, onTyping?: () => void, onTextStatsChange?: (payload: { words: number, characters: number }) => void, onPlainTextChange?: (text: string) => void, draftToApply?: string | null, onDraftApplied?: () => void }} props - Editor props.
  * @returns {JSX.Element}
  */
-export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange }) {
+export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange, onPlainTextChange, draftToApply, onDraftApplied }) {
 	const editorContainerRef = useRef(null);
 
 	const editor = useEditor({
@@ -25,6 +25,7 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 			const text = current.getText() || "";
 			const words = text.trim().length > 0 ? text.trim().split(/\s+/).filter(Boolean).length : 0;
 			onTextStatsChange?.({ words, characters: text.length });
+			onPlainTextChange?.(text);
 		},
 		extensions: [
 			StarterKit.configure({ history: false }),
@@ -43,6 +44,20 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 		],
 		content: "<p>Start collaborating in real time.</p>"
 	});
+
+	useEffect(() => {
+		if (!editor || !draftToApply) {
+			return;
+		}
+
+		const escaped = draftToApply
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/\n/g, "<br />");
+		editor.commands.setContent(`<p>${escaped}</p>`);
+		onDraftApplied?.();
+	}, [draftToApply, editor, onDraftApplied]);
 
 	return (
 		<div

@@ -13,9 +13,9 @@ export function createSocketClient() {
 	return io(backendUrl, {
 		timeout: 60000,
 		reconnection: true,
-		reconnectionAttempts: 10,
+		reconnectionAttempts: 15,
 		reconnectionDelay: 2000,
-		reconnectionDelayMax: 5000,
+		reconnectionDelayMax: 8000,
 		transports: ["websocket", "polling"],
 		withCredentials: true,
 		autoConnect: true
