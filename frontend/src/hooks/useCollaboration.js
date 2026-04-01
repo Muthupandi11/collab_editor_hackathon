@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
 import { createSocketClient } from "../services/socketClient.js";
+import { debounce } from "lodash";
 
 /**
  * Builds a sorted user list from awareness state.
@@ -51,11 +52,27 @@ export function useCollaboration({ documentId, currentUser }) {
 		const socket = createSocketClient();
 		socketRef.current = socket;
 
+		// Create debounced emit for Yjs updates (250ms debounce)
+		const debouncedEmitUpdate = debounce(
+			(update) => {
+				if (!socket.connected) {
+					return;
+				}
+				socket.emit("yjs-update", { 
+					documentId, 
+					update: Array.from(update),
+					timestamp: Date.now()
+				});
+			},
+			250,
+			{ maxWait: 1000 }
+		);
+
 		const handleLocalYjsUpdate = (update, origin) => {
 			if (origin === "remote") {
 				return;
 			}
-			socket.emit("yjs-update", { documentId, update: Array.from(update) });
+			debouncedEmitUpdate(update);
 		};
 
 		const handleRemoteYjsUpdate = (update) => {
@@ -166,6 +183,7 @@ export function useCollaboration({ documentId, currentUser }) {
 			socket.off("document-restored", handleDocumentRestored);
 			socket.disconnect();
 			socketRef.current = null;
+			debouncedEmitUpdate.cancel();
 		};
 	}, [awareness, currentUser, documentId, ydoc]);
 
