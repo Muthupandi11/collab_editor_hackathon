@@ -45,6 +45,10 @@ app.options("*", cors());
 
 app.use(express.json({ limit: "1mb" }));
 
+app.get("/", (_req, res) => {
+	res.status(200).json({ status: "ok", service: "collab-editor-backend" });
+});
+
 app.get("/ping", (_req, res) => {
 	res.status(200).json({ status: "alive", time: Date.now() });
 });

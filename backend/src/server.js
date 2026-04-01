@@ -19,7 +19,10 @@ const getAllowedOrigins = () => {
 	if (process.env.FRONTEND_URL) {
 		origins.push(process.env.FRONTEND_URL);
 	}
-	return origins;
+	if (process.env.CLIENT_ORIGIN) {
+		origins.push(process.env.CLIENT_ORIGIN);
+	}
+	return [...new Set(origins)];
 };
 
 const io = new Server(httpServer, {
@@ -34,7 +37,7 @@ registerCollaborationSocket(io);
 
 connectDatabase()
 	.then(() => {
-		httpServer.listen(PORT, () => {
+		httpServer.listen(PORT, "0.0.0.0", () => {
 			logInfo("Server listening", { port: PORT });
 		});
 	})
