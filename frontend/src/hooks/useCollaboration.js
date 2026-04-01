@@ -78,7 +78,11 @@ export function useCollaboration({ documentId, currentUser }) {
 			}
 
 			const payload = encodeAwarenessUpdate(awareness, changedClients);
-			socket.emit("awareness-update", { documentId, update: Array.from(payload) });
+			socket.emit("awareness-update", {
+				documentId,
+				update: Array.from(payload),
+				clientId: awareness.clientID
+			});
 			pushAwarenessList();
 		};
 
@@ -136,7 +140,8 @@ export function useCollaboration({ documentId, currentUser }) {
 			});
 			socket.emit("awareness-update", {
 				documentId,
-				update: Array.from(encodeAwarenessUpdate(awareness, [awareness.clientID]))
+				update: Array.from(encodeAwarenessUpdate(awareness, [awareness.clientID])),
+				clientId: awareness.clientID
 			});
 			pushAwarenessList();
 

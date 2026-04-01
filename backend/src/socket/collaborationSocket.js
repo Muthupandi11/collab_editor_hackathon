@@ -113,16 +113,15 @@ export function registerCollaborationSocket(io) {
 			socket.to(documentId).emit("yjs-update", payload);
 		});
 
-		socket.on("awareness-update", ({ documentId, update }) => {
+		socket.on("awareness-update", ({ documentId, update, clientId }) => {
 			if (!documentId || !update) {
 				return;
 			}
 
 			const room = getOrCreateRoom(documentId);
 			const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
-			const updatedClientIds = awarenessProtocol.decodeAwarenessUpdate(payload, room.awareness);
 
-			for (const clientId of updatedClientIds.keys()) {
+			if (Number.isInteger(clientId)) {
 				socket.data.awarenessClientIds.add(clientId);
 			}
 
