@@ -19,20 +19,22 @@ function getInitials(name) {
  */
 export default function PresenceList({ users }) {
 	return (
-		<aside className="presence-panel">
-			<div className="panel-title-row">
-				<h2>Online Now</h2>
+		<aside className="presence-panel bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+			<div className="panel-title-row border-l-4 border-blue-500 pl-3">
+				<h2 className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Online Now</h2>
+				<span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
 				<span className="panel-count">{users.length}</span>
 			</div>
 			<ul>
 				{users.length === 0 ? <li className="presence-empty">No other users online</li> : null}
 				{users.map((user) => (
-					<li key={user.id} className="presence-item">
+					<li key={user.id} className="presence-item bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg p-3 transition-all duration-200 translate-x-0" style={{ borderLeft: `4px solid ${user.color}` }}>
 						<span className="presence-avatar" style={{ backgroundColor: user.color }}>
 							{getInitials(user.name)}
 						</span>
 						<div className="presence-meta">
-							<span className="presence-name">{user.name}</span>
+							<span className="text-sm font-medium text-gray-800 dark:text-gray-100">{user.name}</span>
+							<span className="block text-xs text-green-600 dark:text-green-400">● Active now</span>
 							{user.isSelf ? <span className="presence-you">You</span> : null}
 						</div>
 					</li>

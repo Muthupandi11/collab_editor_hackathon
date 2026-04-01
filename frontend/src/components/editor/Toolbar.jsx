@@ -21,10 +21,12 @@ export default function Toolbar({ editor, ready }) {
 	const disabled = !editor || !ready;
 
 	const actionClass = (active) =>
-		active ? "toolbar-icon-btn active" : "toolbar-icon-btn";
+		active
+			? "toolbar-icon-btn active dark:text-blue-300"
+			: "toolbar-icon-btn dark:text-gray-300 dark:hover:bg-gray-700";
 
 	return (
-		<div className="toolbar">
+		<div className="toolbar overflow-x-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl">
 			<div className="toolbar-group" role="group" aria-label="Formatting options">
 				<button
 					type="button"
@@ -135,10 +137,6 @@ export default function Toolbar({ editor, ready }) {
 					<Redo2 size={16} />
 				</button>
 			</div>
-			<span className={ready ? "toolbar-status connected" : "toolbar-status"}>
-				<span className="status-dot" />
-				{ready ? "Live" : "Connecting"}
-			</span>
 		</div>
 	);
 }

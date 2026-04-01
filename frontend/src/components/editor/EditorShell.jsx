@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -11,10 +12,12 @@ import Toolbar from "./Toolbar.jsx";
  * @returns {JSX.Element}
  */
 export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange }) {
+	const editorContainerRef = useRef(null);
+
 	const editor = useEditor({
 		editorProps: {
 			attributes: {
-				class: "editor-content"
+				class: "editor-content prose-placeholder"
 			}
 		},
 		onUpdate: ({ editor: current }) => {
@@ -42,11 +45,28 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 	});
 
 	return (
-		<>
+		<div
+			ref={editorContainerRef}
+			onKeyDownCapture={(event) => {
+				const root = editorContainerRef.current;
+				if (!root) {
+					return;
+				}
+				const target = event.target;
+				if (!(target instanceof HTMLElement)) {
+					return;
+				}
+				if (!target.closest(".ProseMirror")) {
+					event.stopPropagation();
+				}
+			}}
+		>
 			<Toolbar editor={editor} ready={ready} />
-			<div className="editor-card">
-				<EditorContent editor={editor} />
+			<div className="editor-card bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8">
+				<div className="mx-auto max-w-[800px] border-l border-r border-gray-100 dark:border-gray-700 px-4">
+					<EditorContent editor={editor} />
+				</div>
 			</div>
-		</>
+		</div>
 	);
 }

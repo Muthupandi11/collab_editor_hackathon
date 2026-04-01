@@ -1,5 +1,8 @@
 /** @type {string} Base backend URL from environment */
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+const BACKEND_URL =
+	import.meta.env.VITE_BACKEND_URL ||
+	import.meta.env.VITE_API_URL ||
+	"http://localhost:4000";
 
 /**
  * Fetch revision history for a document
@@ -7,25 +10,52 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
  * @returns {Promise<Array>} Array of revision objects with timestamp, content, author
  */
 export const fetchRevisions = async (docId) => {
+	const endpoint = `${BACKEND_URL}/api/documents/${docId}/revisions`;
+
 	try {
-		const response = await fetch(
-			`${BACKEND_URL}/api/revisions/${docId}`,
-			{
-				method: "GET",
-				credentials: "include",
-				headers: { "Content-Type": "application/json" }
-			}
-		);
+		const response = await fetch(endpoint, {
+			method: "GET",
+			credentials: "include",
+			headers: { "Content-Type": "application/json" }
+		});
 
 		if (!response.ok) {
-			throw new Error(`Failed to fetch revisions: ${response.statusText}`);
+			console.error("Revision fetch failed", {
+				status: response.status,
+				statusText: response.statusText,
+				endpoint
+			});
+			throw new Error("Backend offline - revisions unavailable");
 		}
 
 		const data = await response.json();
 		return data.revisions || [];
 	} catch (error) {
-		console.error("Error fetching revisions:", error.message);
-		throw error;
+		console.error("Error fetching revisions (attempt 1):", error);
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+
+		try {
+			const retryResponse = await fetch(endpoint, {
+				method: "GET",
+				credentials: "include",
+				headers: { "Content-Type": "application/json" }
+			});
+
+			if (!retryResponse.ok) {
+				console.error("Revision fetch failed after retry", {
+					status: retryResponse.status,
+					statusText: retryResponse.statusText,
+					endpoint
+				});
+				throw new Error("Backend offline - revisions unavailable");
+			}
+
+			const retryData = await retryResponse.json();
+			return retryData.revisions || [];
+		} catch (retryError) {
+			console.error("Error fetching revisions (retry):", retryError);
+			throw new Error("Backend offline - revisions unavailable");
+		}
 	}
 };
 

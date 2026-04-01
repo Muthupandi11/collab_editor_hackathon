@@ -46,18 +46,48 @@ export function useCollaboration({ documentId, currentUser }) {
 	const awareness = useMemo(() => new Awareness(ydoc), [ydoc]);
 	const socketRef = useRef(null);
 	const typingStopTimerRef = useRef(null);
+	const retryCountdownRef = useRef(null);
+	const wakeupTimerRef = useRef(null);
 	const titleEmitRef = useRef(() => {});
 	const [ready, setReady] = useState(false);
 	const [connectionStatus, setConnectionStatus] = useState("connecting");
+	const [connectionMessage, setConnectionMessage] = useState("Connecting...");
+	const [retryIn, setRetryIn] = useState(0);
 	const [saveStatus, setSaveStatus] = useState("idle");
 	const [typingUsers, setTypingUsers] = useState([]);
 	const [documentTitle, setDocumentTitle] = useState("Untitled Document");
 	const [onlineUsers, setOnlineUsers] = useState([]);
 
+	const startRetryCountdown = (seconds) => {
+		if (retryCountdownRef.current) {
+			clearInterval(retryCountdownRef.current);
+		}
+		setRetryIn(seconds);
+		retryCountdownRef.current = setInterval(() => {
+			setRetryIn((prev) => {
+				if (prev <= 1) {
+					if (retryCountdownRef.current) {
+						clearInterval(retryCountdownRef.current);
+						retryCountdownRef.current = null;
+					}
+					return 0;
+				}
+				return prev - 1;
+			});
+		}, 1000);
+	};
+
 	useEffect(() => {
 		const socket = createSocketClient();
 		socketRef.current = socket;
 		setConnectionStatus("connecting");
+		setConnectionMessage("Connecting...");
+
+		wakeupTimerRef.current = setTimeout(() => {
+			if (!socket.connected) {
+				setConnectionMessage("Waking up server...");
+			}
+		}, 5000);
 
 		const debouncedTitleEmit = debounce((title) => {
 			if (!socket.connected) {
@@ -170,11 +200,24 @@ export function useCollaboration({ documentId, currentUser }) {
 		const handleDisconnect = () => {
 			setReady(false);
 			setConnectionStatus("disconnected");
+			setConnectionMessage("Offline");
 			setSaveStatus((prev) => (prev === "saving" ? "error" : prev));
 		};
 
 		const handleConnectError = () => {
+			setConnectionStatus("connecting");
+			setConnectionMessage("Waking up server...");
+		};
+
+		const handleReconnectAttempt = () => {
+			setConnectionStatus("connecting");
+			setConnectionMessage("Retrying...");
+			startRetryCountdown(2);
+		};
+
+		const handleReconnectFailed = () => {
 			setConnectionStatus("disconnected");
+			setConnectionMessage("Offline");
 		};
 
 		const handleDocumentRestored = () => {
@@ -225,9 +268,21 @@ export function useCollaboration({ documentId, currentUser }) {
 
 			setReady(true);
 			setConnectionStatus("connected");
+			setConnectionMessage("Live");
+			setRetryIn(0);
+			if (retryCountdownRef.current) {
+				clearInterval(retryCountdownRef.current);
+				retryCountdownRef.current = null;
+			}
+			if (wakeupTimerRef.current) {
+				clearTimeout(wakeupTimerRef.current);
+				wakeupTimerRef.current = null;
+			}
 		});
 		socket.on("disconnect", handleDisconnect);
 		socket.on("connect_error", handleConnectError);
+		socket.io.on("reconnect_attempt", handleReconnectAttempt);
+		socket.io.on("reconnect_failed", handleReconnectFailed);
 		socket.on("document-restored", handleDocumentRestored);
 		socket.on("user-typing", handleTypingStart);
 		socket.on("user-stopped-typing", handleTypingStop);
@@ -247,6 +302,8 @@ export function useCollaboration({ documentId, currentUser }) {
 			awareness.setLocalState(null);
 			socket.off("disconnect", handleDisconnect);
 			socket.off("connect_error", handleConnectError);
+			socket.io.off("reconnect_attempt", handleReconnectAttempt);
+			socket.io.off("reconnect_failed", handleReconnectFailed);
 			socket.off("document-restored", handleDocumentRestored);
 			socket.off("user-typing", handleTypingStart);
 			socket.off("user-stopped-typing", handleTypingStop);
@@ -258,6 +315,14 @@ export function useCollaboration({ documentId, currentUser }) {
 			if (typingStopTimerRef.current) {
 				clearTimeout(typingStopTimerRef.current);
 				typingStopTimerRef.current = null;
+			}
+			if (retryCountdownRef.current) {
+				clearInterval(retryCountdownRef.current);
+				retryCountdownRef.current = null;
+			}
+			if (wakeupTimerRef.current) {
+				clearTimeout(wakeupTimerRef.current);
+				wakeupTimerRef.current = null;
 			}
 		};
 	}, [awareness, currentUser, documentId, ydoc]);
@@ -295,10 +360,23 @@ export function useCollaboration({ documentId, currentUser }) {
 	 * @returns {void}
 	 */
 	function updateDocumentTitle(nextTitle) {
-		const title = (nextTitle || "").trim() || "Untitled Document";
+		const title = nextTitle ?? "";
 		setDocumentTitle(title);
-		document.title = `${title} - CollabEditor`;
+		document.title = `${title || "Untitled Document"} - CollabEditor`;
 		titleEmitRef.current(title);
+	}
+
+	/**
+	 * Manually retries socket connection.
+	 * @returns {void}
+	 */
+	function retryConnection() {
+		if (!socketRef.current) {
+			return;
+		}
+		setConnectionStatus("connecting");
+		setConnectionMessage("Retrying...");
+		socketRef.current.connect();
 	}
 
 	/**
@@ -336,12 +414,15 @@ export function useCollaboration({ documentId, currentUser }) {
 		awareness,
 		ready,
 		connectionStatus,
+		connectionMessage,
+		retryIn,
 		saveStatus,
 		typingUsers,
 		documentTitle,
 		onlineUsers,
 		notifyTyping,
 		updateDocumentTitle,
+		retryConnection,
 		requestRevisionRestore
 	};
 }

@@ -11,6 +11,8 @@
 	--mint-2: #2563eb;
 	--panel: #ffffff;
 	--edge: #e5e7eb;
+	--editor-text: #111827;
+	--editor-placeholder: #9ca3af;
 }
 
 html.dark {
@@ -18,6 +20,8 @@ html.dark {
 	--soft-ink: #9ca3af;
 	--panel: #1a1a1a;
 	--edge: #2a2a2a;
+	--editor-text: #f9fafb;
+	--editor-placeholder: #6b7280;
 	background: #0f0f0f;
 }
 
@@ -128,10 +132,17 @@ html.dark body {
 	padding: 0.45rem 0.62rem;
 	border: 1px solid var(--edge);
 	border-radius: 8px;
-	font-size: 0.95rem;
+	font-size: 1.125rem;
 	font-weight: 600;
-	background: #fff;
-	color: var(--ink);
+	background: #ffffff;
+	color: #111827;
+	border-color: #e5e7eb;
+}
+
+html.dark .title-input {
+	background: #1f2937;
+	color: #f9fafb;
+	border-color: #374151;
 }
 
 .title-input:focus {
@@ -151,6 +162,11 @@ html.dark body {
 	border-radius: 12px;
 	background: rgba(255, 255, 255, 0.75);
 	backdrop-filter: blur(3px);
+}
+
+html.dark .toolbar {
+	background: #111827;
+	border-color: #374151;
 }
 
 .toolbar-group {
@@ -177,6 +193,17 @@ html.dark body {
 	border-radius: 8px;
 	cursor: pointer;
 	transition: transform 140ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+html.dark .toolbar-icon-btn {
+	background: #1f2937;
+	color: #d1d5db;
+	border-color: #374151;
+}
+
+html.dark .toolbar-icon-btn:hover:not(:disabled) {
+	background: #374151;
+	box-shadow: none;
 }
 
 .toolbar-icon-btn:hover:not(:disabled) {
@@ -257,9 +284,15 @@ html.dark body {
 	background: var(--panel);
 	border: 1px solid var(--edge);
 	border-radius: 14px;
-	padding: 1.05rem;
+	padding: 2rem;
 	min-height: 65vh;
 	box-shadow: 0 14px 36px rgba(18, 45, 36, 0.09);
+}
+
+html.dark .editor-card {
+	background: #1f2937;
+	border-color: #374151;
+	box-shadow: none;
 }
 
 .editor-content {
@@ -267,6 +300,19 @@ html.dark body {
 	outline: none;
 	font-size: 1.03rem;
 	letter-spacing: 0.01em;
+}
+
+.ProseMirror {
+	color: var(--editor-text);
+	min-height: 58vh;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+	content: "Start writing or paste content here...";
+	float: left;
+	color: var(--editor-placeholder);
+	pointer-events: none;
+	height: 0;
 }
 
 .bottom-bar {
@@ -304,12 +350,24 @@ html.dark body {
 	height: fit-content;
 }
 
+html.dark .presence-panel {
+	background: #111827;
+	border-color: #374151;
+	box-shadow: none;
+}
+
 .revision-panel {
 	background: var(--panel);
 	border: 1px solid var(--edge);
 	border-radius: 14px;
 	padding: 0.9rem;
 	box-shadow: 0 12px 30px rgba(17, 42, 34, 0.08);
+}
+
+html.dark .revision-panel {
+	background: #111827;
+	border-color: #374151;
+	box-shadow: none;
 }
 
 .panel-title-row {
@@ -385,6 +443,11 @@ html.dark body {
 	animation: shimmer 1.2s infinite;
 }
 
+html.dark .skeleton-row {
+	background: #374151;
+	animation: pulse 1.2s infinite;
+}
+
 .revision-error-wrap {
 	display: flex;
 	align-items: center;
@@ -430,6 +493,20 @@ html.dark body {
 	background: #f2f8f5;
 	transition: transform 120ms ease;
 	animation: slide-in-right 180ms ease-out;
+}
+
+html.dark .presence-item:hover {
+	background: #1f2937;
+}
+
+.presence-name {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: #1f2937;
+}
+
+html.dark .presence-name {
+	color: #f3f4f6;
 }
 
 .toast-viewport {
@@ -493,6 +570,25 @@ html.dark body {
 @keyframes slide-in-right {
 	from { opacity: 0; transform: translateX(8px); }
 	to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.55; }
+}
+
+@media (max-width: 1024px) {
+	.app-shell {
+		padding: 1rem 0.75rem 1.4rem;
+	}
+
+	.editor-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.sidebar-stack {
+		position: static;
+	}
 }
 
 .presence-item:hover {

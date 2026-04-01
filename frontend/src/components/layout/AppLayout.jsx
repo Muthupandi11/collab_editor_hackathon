@@ -9,7 +9,7 @@ import { toast } from "../../lib/toast.js";
  */
 export default function AppLayout({ children, documentId }) {
 	const [copied, setCopied] = useState(false);
-	const [darkMode, setDarkMode] = useState(() => localStorage.getItem("collab-theme") === "dark");
+	const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
 
 	useEffect(() => {
 		document.documentElement.classList.toggle("dark", darkMode);
@@ -31,20 +31,20 @@ export default function AppLayout({ children, documentId }) {
 		const next = !darkMode;
 		setDarkMode(next);
 		document.documentElement.classList.toggle("dark", next);
-		localStorage.setItem("collab-theme", next ? "dark" : "light");
+		localStorage.setItem("theme", next ? "dark" : "light");
 	};
 
 	return (
-		<div className="app-shell">
+		<div className="app-shell bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
 			<header className="app-header">
 				<div className="title-wrap">
-					<p className="app-kicker">Hackathon Build</p>
-					<h1>Live Collaborative Editor</h1>
-					<p className="app-subtitle">Fast shared writing with conflict-free edits and live presence.</p>
+					<p className="app-kicker text-xs font-bold tracking-widest bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">HACKATHON BUILD</p>
+					<h1 className="text-4xl font-bold text-gray-900 dark:text-white mt-1">Live Collaborative Editor</h1>
+					<p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">Fast shared writing with conflict-free edits and live presence.</p>
 				</div>
 				<div className="header-actions">
-					<div className="room-chip">Room: {documentId}</div>
-					<button type="button" className="toolbar-btn" onClick={toggleTheme}>
+					<div className="px-3 py-1.5 bg-blue-600 text-white text-sm font-mono rounded-full shadow-sm">Room:{documentId}</div>
+					<button type="button" className="toolbar-btn" onClick={toggleTheme} aria-label="Toggle theme">
 						{darkMode ? <Sun size={16} /> : <Moon size={16} />}
 					</button>
 					<button type="button" className="toolbar-btn" onClick={handleShare}>
