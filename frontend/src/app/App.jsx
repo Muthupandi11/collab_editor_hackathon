@@ -52,7 +52,7 @@ export default function App() {
 
 	return (
 		<>
-			<AppLayout documentId={documentId}>
+			<AppLayout>
 				<EditorPage documentId={documentId} currentUser={currentUser} />
 			</AppLayout>
 			<ToastViewport />

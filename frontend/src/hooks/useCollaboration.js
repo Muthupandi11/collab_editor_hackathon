@@ -60,6 +60,8 @@ export function useCollaboration({ documentId, currentUser }) {
 	const [typingUsers, setTypingUsers] = useState([]);
 	const [documentTitle, setDocumentTitle] = useState("Untitled Document");
 	const [onlineUsers, setOnlineUsers] = useState([]);
+	const [chatMessages, setChatMessages] = useState([]);
+	const [remoteCursors, setRemoteCursors] = useState([]);
 
 	const startRetryCountdown = (seconds) => {
 		if (retryCountdownRef.current) {
@@ -252,6 +254,30 @@ export function useCollaboration({ documentId, currentUser }) {
 			setTypingUsers((prev) => prev.filter((entry) => entry.userId !== userId));
 		};
 
+		const handleChatHistory = (history) => {
+			setChatMessages(Array.isArray(history) ? history : []);
+		};
+
+		const handleNewMessage = (message) => {
+			if (!message?.id) {
+				return;
+			}
+			setChatMessages((prev) => {
+				const next = [...prev, message];
+				return next.length > 50 ? next.slice(-50) : next;
+			});
+		};
+
+		const handleCursorUpdate = (payload) => {
+			if (!payload?.userId) {
+				return;
+			}
+			setRemoteCursors((prev) => {
+				const filtered = prev.filter((entry) => entry.userId !== payload.userId);
+				return [...filtered, payload].slice(-50);
+			});
+		};
+
 		const handleTitleUpdated = ({ title }) => {
 			const nextTitle = title || "Untitled Document";
 			setDocumentTitle(nextTitle);
@@ -307,7 +333,11 @@ export function useCollaboration({ documentId, currentUser }) {
 		socket.on("document-restored", handleDocumentRestored);
 		socket.on("user-typing", handleTypingStart);
 		socket.on("user-stopped-typing", handleTypingStop);
+		socket.on("user-stopped", handleTypingStop);
 		socket.on("title-updated", handleTitleUpdated);
+		socket.on("chat-history", handleChatHistory);
+		socket.on("new-message", handleNewMessage);
+		socket.on("cursor-update", handleCursorUpdate);
 
 		socket.on("document-state", handleRemoteYjsUpdate);
 		socket.on("yjs-update", handleRemoteYjsUpdate);
@@ -328,7 +358,11 @@ export function useCollaboration({ documentId, currentUser }) {
 			socket.off("document-restored", handleDocumentRestored);
 			socket.off("user-typing", handleTypingStart);
 			socket.off("user-stopped-typing", handleTypingStop);
+			socket.off("user-stopped", handleTypingStop);
 			socket.off("title-updated", handleTitleUpdated);
+			socket.off("chat-history", handleChatHistory);
+			socket.off("new-message", handleNewMessage);
+			socket.off("cursor-update", handleCursorUpdate);
 			socket.disconnect();
 			socketRef.current = null;
 			debouncedEmitUpdate.cancel();
@@ -405,6 +439,78 @@ export function useCollaboration({ documentId, currentUser }) {
 	}
 
 	/**
+	 * Emits a chat message to the current room.
+	 * @param {string} message - Chat message text.
+	 * @returns {void}
+	 */
+	function sendChatMessage(message) {
+		if (!socketRef.current?.connected) {
+			return;
+		}
+
+		socketRef.current.emit("chat-message", {
+			message,
+			roomId: documentId,
+			userId: awareness.clientID,
+			username: currentUser.name,
+			color: currentUser.color
+		});
+	}
+
+	/**
+	 * Emits cursor position updates for remote awareness labels.
+	 * @param {number} position - Current cursor position.
+	 * @returns {void}
+	 */
+	function reportCursorMove(position) {
+		if (!socketRef.current?.connected || typeof position !== "number") {
+			return;
+		}
+
+		socketRef.current.emit("cursor-move", {
+			roomId: documentId,
+			userId: awareness.clientID,
+			username: currentUser.name,
+			color: currentUser.color,
+			position
+		});
+	}
+
+	/**
+	 * Force-saves current Yjs document state through socket ack.
+	 * @returns {Promise<boolean>}
+	 */
+	async function forceSave() {
+		if (!socketRef.current?.connected) {
+			setSaveStatus("error");
+			return false;
+		}
+
+		setSaveStatus("saving");
+		const update = Y.encodeStateAsUpdate(ydoc);
+
+		return new Promise((resolve) => {
+			socketRef.current.emit(
+				"yjs-update",
+				{
+					documentId,
+					update: Array.from(update),
+					timestamp: Date.now()
+				},
+				(response) => {
+					if (response?.ok) {
+						setSaveStatus("saved");
+						resolve(true);
+						return;
+					}
+					setSaveStatus("error");
+					resolve(false);
+				}
+			);
+		});
+	}
+
+	/**
 	 * Requests a server-side restore to a selected revision.
 	 * @param {string} revisionId - Revision identifier.
 	 * @returns {Promise<void>}
@@ -447,9 +553,14 @@ export function useCollaboration({ documentId, currentUser }) {
 		typingUsers,
 		documentTitle,
 		onlineUsers,
+		chatMessages,
+		remoteCursors,
 		notifyTyping,
 		updateDocumentTitle,
 		retryConnection,
+		sendChatMessage,
+		reportCursorMove,
+		forceSave,
 		requestRevisionRestore
 	};
 }

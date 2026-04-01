@@ -1,6 +1,13 @@
 const listeners = new Set();
 let queue = [];
 let idSeed = 1;
+const MAX_TOASTS = 3;
+const DURATION = {
+	success: 2500,
+	error: 4000,
+	info: 3000,
+	warning: 3500
+};
 
 function notify() {
 	listeners.forEach((listener) => listener(queue));
@@ -30,10 +37,14 @@ export function dismissToast(id) {
 }
 
 function addToast(type, message) {
+	if (queue.some((toast) => toast.type === type && toast.message === message)) {
+		return;
+	}
+
 	const id = idSeed++;
-	queue = [...queue, { id, type, message }].slice(-3);
+	queue = [...queue, { id, type, message }].slice(-MAX_TOASTS);
 	notify();
-	setTimeout(() => dismissToast(id), 3000);
+	setTimeout(() => dismissToast(id), DURATION[type] || 3000);
 }
 
 /**

@@ -10,6 +10,7 @@ const rooms = new Map();
 const roomHydrationJobs = new Map();
 const roomTitles = new Map();
 const roomTyping = new Map();
+const roomChats = new Map();
 
 /**
  * Returns an existing room or creates a new in-memory room.
@@ -62,6 +63,7 @@ function cleanupRoomIfEmpty(documentId) {
 	rooms.delete(documentId);
 	roomTitles.delete(documentId);
 	roomTyping.delete(documentId);
+	roomChats.delete(documentId);
 	logInfo("Room cleaned up", { documentId });
 }
 
@@ -111,6 +113,7 @@ export function registerCollaborationSocket(io) {
 				documentId,
 				title: roomTitles.get(documentId) || "Untitled Document"
 			});
+			socket.emit("chat-history", roomChats.get(documentId) || []);
 
 			logInfo("Joined document room", { documentId, socketId: socket.id });
 		});
@@ -165,6 +168,7 @@ export function registerCollaborationSocket(io) {
 				const nextRoomUsers = roomTyping.get(roomId);
 				nextRoomUsers?.delete(userId);
 				socket.to(roomId).emit("user-stopped-typing", { roomId, userId });
+				socket.to(roomId).emit("user-stopped", { roomId, userId });
 			}, 3000);
 
 			roomUsers.set(userId, { username: username || "Someone", timeout });
@@ -184,6 +188,52 @@ export function registerCollaborationSocket(io) {
 			}
 			roomUsers?.delete(userId);
 			socket.to(roomId).emit("user-stopped-typing", { roomId, userId });
+			socket.to(roomId).emit("user-stopped", { roomId, userId });
+		});
+
+		socket.on("chat-message", ({ message, roomId, userId, username, color }) => {
+			if (!roomId || typeof message !== "string") {
+				return;
+			}
+
+			const trimmed = message.trim();
+			if (!trimmed || trimmed.length > 500) {
+				return;
+			}
+
+			const msg = {
+				id: `${Date.now()}-${Math.random()}`,
+				userId: userId || socket.id,
+				username: username || "Guest",
+				color: color || "#2563EB",
+				message: trimmed,
+				timestamp: new Date().toISOString()
+			};
+
+			if (!roomChats.has(roomId)) {
+				roomChats.set(roomId, []);
+			}
+			const history = roomChats.get(roomId);
+			history.push(msg);
+			if (history.length > 50) {
+				history.shift();
+			}
+
+			io.to(roomId).emit("new-message", msg);
+		});
+
+		socket.on("cursor-move", ({ userId, username, color, position, roomId }) => {
+			if (!roomId || typeof position !== "number") {
+				return;
+			}
+
+			socket.to(roomId).emit("cursor-update", {
+				userId: userId || socket.id,
+				username: username || socket.data?.user?.name || "Guest",
+				color: color || socket.data?.user?.color || "#2563EB",
+				position,
+				timestamp: Date.now()
+			});
 		});
 
 		socket.on("title-change", async ({ roomId, title, updatedBy }) => {

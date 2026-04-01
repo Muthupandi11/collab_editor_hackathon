@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CheckCircle2, AlertCircle, Info, TriangleAlert, X } from "lucide-react";
 import { subscribeToToasts, dismissToast } from "../../lib/toast.js";
 
 /**
@@ -21,9 +22,15 @@ export default function ToastViewport() {
 		<div className="toast-viewport" aria-live="polite" aria-atomic="true">
 			{toasts.map((toast) => (
 				<div key={toast.id} className={`toast toast-${toast.type}`}>
+					<span className="toast-icon">
+						{toast.type === "success" ? <CheckCircle2 size={16} /> : null}
+						{toast.type === "error" ? <AlertCircle size={16} /> : null}
+						{toast.type === "info" ? <Info size={16} /> : null}
+						{toast.type === "warning" ? <TriangleAlert size={16} /> : null}
+					</span>
 					<p>{toast.message}</p>
-					<button type="button" onClick={() => dismissToast(toast.id)}>
-						Dismiss
+					<button type="button" className="toast-close" onClick={() => dismissToast(toast.id)}>
+						<X size={14} />
 					</button>
 				</div>
 			))}
