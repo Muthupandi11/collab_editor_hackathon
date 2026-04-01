@@ -4,6 +4,7 @@ import RevisionHistory from "../components/editor/RevisionHistory.jsx";
 import PresenceList from "../components/presence/PresenceList.jsx";
 import { useCollaboration } from "../hooks/useCollaboration.js";
 import { fetchRevisions } from "../services/apiClient.js";
+import { toast } from "../lib/toast.js";
 
 /**
  * Document editor page.
@@ -41,6 +42,7 @@ export default function EditorPage({ documentId, currentUser }) {
 			setRevisions(result);
 		} catch (error) {
 			setRevisionError(error.message || "Failed to load revisions.");
+			toast.error("Failed to fetch revision history");
 		} finally {
 			setLoadingRevisions(false);
 		}
@@ -70,9 +72,11 @@ export default function EditorPage({ documentId, currentUser }) {
 			setRevisionError("");
 			try {
 				await requestRevisionRestore(revisionId);
+				toast.success("Document restored");
 			} catch (error) {
 				setRevisionError(error.message || "Restore failed.");
 				setRestoringId(null);
+				toast.error("Failed to restore revision");
 			}
 		},
 		[requestRevisionRestore]

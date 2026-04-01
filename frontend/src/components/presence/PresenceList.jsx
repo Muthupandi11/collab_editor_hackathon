@@ -21,11 +21,11 @@ export default function PresenceList({ users }) {
 	return (
 		<aside className="presence-panel">
 			<div className="panel-title-row">
-				<h2>Online Users</h2>
+				<h2>Online Now</h2>
 				<span className="panel-count">{users.length}</span>
 			</div>
 			<ul>
-				{users.length === 0 ? <li className="presence-empty">No collaborators yet.</li> : null}
+				{users.length === 0 ? <li className="presence-empty">No other users online</li> : null}
 				{users.map((user) => (
 					<li key={user.id} className="presence-item">
 						<span className="presence-avatar" style={{ backgroundColor: user.color }}>

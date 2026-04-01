@@ -5,6 +5,7 @@ import { getColorBySeed } from "../lib/colors.js";
 import { useEffect } from "react";
 import { startKeepAlive } from "../utils/keepAlive.js";
 import { nanoid } from "nanoid";
+import ToastViewport from "../components/ui/ToastViewport.jsx";
 
 /**
  * Parses URL path to fetch document room ID.
@@ -50,8 +51,11 @@ export default function App() {
 	}, []);
 
 	return (
-		<AppLayout documentId={documentId}>
-			<EditorPage documentId={documentId} currentUser={currentUser} />
-		</AppLayout>
+		<>
+			<AppLayout documentId={documentId}>
+				<EditorPage documentId={documentId} currentUser={currentUser} />
+			</AppLayout>
+			<ToastViewport />
+		</>
 	);
 }
