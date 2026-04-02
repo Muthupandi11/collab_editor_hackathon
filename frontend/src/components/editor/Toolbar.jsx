@@ -95,6 +95,17 @@ export default function Toolbar({ editor, ready }) {
 		event.preventDefault();
 	};
 
+	const runWithSelection = (configureChain) => {
+		if (!editor) {
+			return;
+		}
+
+		const selection = editor.state.selection;
+		const chain = editor.chain().focus().setTextSelection({ from: selection.from, to: selection.to });
+		configureChain(chain);
+		chain.run();
+	};
+
 	useEffect(() => {
 		const handlePointerDown = (event) => {
 			if (!toolbarRef.current?.contains(event.target)) {
@@ -165,7 +176,7 @@ export default function Toolbar({ editor, ready }) {
 							className="toolbar-select"
 							disabled={disabled}
 							value={currentFontFamily}
-							onChange={(event) => editor?.chain().focus().setMark("textStyle", { fontFamily: event.target.value }).run()}
+							onChange={(event) => runWithSelection((chain) => chain.setMark("textStyle", { fontFamily: event.target.value }))}
 						>
 							{FONT_FAMILIES.map((family) => (
 								<option key={family.value} value={family.value} style={{ fontFamily: family.value }}>{family.label}</option>
@@ -179,7 +190,7 @@ export default function Toolbar({ editor, ready }) {
 							className="toolbar-select small"
 							disabled={disabled}
 							value={currentFontSize}
-							onChange={(event) => editor?.chain().focus().setMark("textStyle", { fontSize: event.target.value }).run()}
+							onChange={(event) => runWithSelection((chain) => chain.setMark("textStyle", { fontSize: event.target.value }))}
 						>
 							{FONT_SIZES.map((size) => (
 								<option key={size} value={size}>{size.replace("px", "")}</option>
@@ -187,10 +198,10 @@ export default function Toolbar({ editor, ready }) {
 						</select>
 					</div>
 					<div className="toolbar-section toolbar-grid-4">
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("bold"))} onClick={() => editor?.chain().focus().toggleBold().run()} disabled={disabled}><Bold size={16} /><span>Bold</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("italic"))} onClick={() => editor?.chain().focus().toggleItalic().run()} disabled={disabled}><Italic size={16} /><span>Italic</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("underline"))} onClick={() => editor?.chain().focus().toggleUnderline().run()} disabled={disabled}><Underline size={16} /><span>Underline</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("strike"))} onClick={() => editor?.chain().focus().toggleStrike().run()} disabled={disabled}><Strikethrough size={16} /><span>Strike</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("bold"))} onClick={() => runWithSelection((chain) => chain.toggleBold())} disabled={disabled}><Bold size={16} /><span>Bold</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("italic"))} onClick={() => runWithSelection((chain) => chain.toggleItalic())} disabled={disabled}><Italic size={16} /><span>Italic</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("underline"))} onClick={() => runWithSelection((chain) => chain.toggleUnderline())} disabled={disabled}><Underline size={16} /><span>Underline</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("strike"))} onClick={() => runWithSelection((chain) => chain.toggleStrike())} disabled={disabled}><Strikethrough size={16} /><span>Strike</span></button>
 					</div>
 					<div className="toolbar-section toolbar-grid-2">
 						<div className="toolbar-popover-anchor">
@@ -199,8 +210,8 @@ export default function Toolbar({ editor, ready }) {
 								<ToolbarColorPopover
 									title="Text color"
 									colors={TEXT_COLORS}
-									onSelect={(color) => editor?.chain().focus().setColor(color).run()}
-									onClear={() => editor?.chain().focus().unsetColor().run()}
+									onSelect={(color) => runWithSelection((chain) => chain.setColor(color))}
+									onClear={() => runWithSelection((chain) => chain.unsetColor())}
 								/>
 							) : null}
 						</div>
@@ -212,12 +223,12 @@ export default function Toolbar({ editor, ready }) {
 									colors={HIGHLIGHT_COLORS}
 									onSelect={(color) => {
 										if (color === "transparent") {
-											editor?.chain().focus().unsetHighlight().run();
+											runWithSelection((chain) => chain.unsetHighlight());
 											return;
 										}
-										editor?.chain().focus().toggleHighlight({ color }).run();
+										runWithSelection((chain) => chain.toggleHighlight({ color }));
 									}}
-									onClear={() => editor?.chain().focus().unsetHighlight().run()}
+									onClear={() => runWithSelection((chain) => chain.unsetHighlight())}
 								/>
 							) : null}
 						</div>
@@ -228,21 +239,21 @@ export default function Toolbar({ editor, ready }) {
 			{openMenu === "paragraph" ? (
 				<div className="toolbar-menu-panel">
 					<div className="toolbar-section toolbar-grid-3">
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("heading", { level: 1 }))} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} disabled={disabled}><Heading1 size={16} /><span>Heading 1</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("heading", { level: 2 }))} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} disabled={disabled}><Heading2 size={16} /><span>Heading 2</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("heading", { level: 3 }))} onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} disabled={disabled}><Heading3 size={16} /><span>Heading 3</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("heading", { level: 1 }))} onClick={() => runWithSelection((chain) => chain.toggleHeading({ level: 1 }))} disabled={disabled}><Heading1 size={16} /><span>Heading 1</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("heading", { level: 2 }))} onClick={() => runWithSelection((chain) => chain.toggleHeading({ level: 2 }))} disabled={disabled}><Heading2 size={16} /><span>Heading 2</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("heading", { level: 3 }))} onClick={() => runWithSelection((chain) => chain.toggleHeading({ level: 3 }))} disabled={disabled}><Heading3 size={16} /><span>Heading 3</span></button>
 					</div>
 					<div className="toolbar-section toolbar-grid-4">
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "left" }))} onClick={() => editor?.chain().focus().setTextAlign("left").run()} disabled={disabled}><AlignLeft size={16} /><span>Left</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "center" }))} onClick={() => editor?.chain().focus().setTextAlign("center").run()} disabled={disabled}><AlignCenter size={16} /><span>Center</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "right" }))} onClick={() => editor?.chain().focus().setTextAlign("right").run()} disabled={disabled}><AlignRight size={16} /><span>Right</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "justify" }))} onClick={() => editor?.chain().focus().setTextAlign("justify").run()} disabled={disabled}><AlignJustify size={16} /><span>Justify</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "left" }))} onClick={() => runWithSelection((chain) => chain.setTextAlign("left"))} disabled={disabled}><AlignLeft size={16} /><span>Left</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "center" }))} onClick={() => runWithSelection((chain) => chain.setTextAlign("center"))} disabled={disabled}><AlignCenter size={16} /><span>Center</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "right" }))} onClick={() => runWithSelection((chain) => chain.setTextAlign("right"))} disabled={disabled}><AlignRight size={16} /><span>Right</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive({ textAlign: "justify" }))} onClick={() => runWithSelection((chain) => chain.setTextAlign("justify"))} disabled={disabled}><AlignJustify size={16} /><span>Justify</span></button>
 					</div>
 					<div className="toolbar-section toolbar-grid-4">
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("bulletList"))} onClick={() => editor?.chain().focus().toggleBulletList().run()} disabled={disabled}><List size={16} /><span>Bullets</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("orderedList"))} onClick={() => editor?.chain().focus().toggleOrderedList().run()} disabled={disabled}><ListOrdered size={16} /><span>Numbered</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("blockquote"))} onClick={() => editor?.chain().focus().toggleBlockquote().run()} disabled={disabled}><Quote size={16} /><span>Quote</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("codeBlock"))} onClick={() => editor?.chain().focus().toggleCodeBlock().run()} disabled={disabled}><Code2 size={16} /><span>Code</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("bulletList"))} onClick={() => runWithSelection((chain) => chain.toggleBulletList())} disabled={disabled}><List size={16} /><span>Bullets</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("orderedList"))} onClick={() => runWithSelection((chain) => chain.toggleOrderedList())} disabled={disabled}><ListOrdered size={16} /><span>Numbered</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("blockquote"))} onClick={() => runWithSelection((chain) => chain.toggleBlockquote())} disabled={disabled}><Quote size={16} /><span>Quote</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("codeBlock"))} onClick={() => runWithSelection((chain) => chain.toggleCodeBlock())} disabled={disabled}><Code2 size={16} /><span>Code</span></button>
 					</div>
 				</div>
 			) : null}
@@ -250,9 +261,9 @@ export default function Toolbar({ editor, ready }) {
 			{openMenu === "insert" ? (
 				<div className="toolbar-menu-panel">
 					<div className="toolbar-section toolbar-grid-3">
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("subscript"))} onClick={() => editor?.chain().focus().toggleSubscript().run()} disabled={disabled}><Subscript size={16} /><span>Subscript</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("superscript"))} onClick={() => editor?.chain().focus().toggleSuperscript().run()} disabled={disabled}><Superscript size={16} /><span>Superscript</span></button>
-						<button type="button" onMouseDown={keepSelection} className={actionClass(false)} onClick={() => editor?.chain().focus().setHorizontalRule().run()} disabled={disabled}><Minus size={16} /><span>Rule</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("subscript"))} onClick={() => runWithSelection((chain) => chain.toggleSubscript())} disabled={disabled}><Subscript size={16} /><span>Subscript</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(editor?.isActive("superscript"))} onClick={() => runWithSelection((chain) => chain.toggleSuperscript())} disabled={disabled}><Superscript size={16} /><span>Superscript</span></button>
+						<button type="button" onMouseDown={keepSelection} className={actionClass(false)} onClick={() => runWithSelection((chain) => chain.setHorizontalRule())} disabled={disabled}><Minus size={16} /><span>Rule</span></button>
 					</div>
 				</div>
 			) : null}
@@ -260,9 +271,9 @@ export default function Toolbar({ editor, ready }) {
 			{openMenu === "history" ? (
 				<div className="toolbar-menu-panel">
 					<div className="toolbar-section toolbar-grid-3">
-						<button type="button" onMouseDown={keepSelection} className="toolbar-icon-btn" onClick={() => editor?.chain().focus().undo().run()} disabled={disabled || !editor?.can().undo()}><Undo2 size={16} /><span>Undo</span></button>
-						<button type="button" onMouseDown={keepSelection} className="toolbar-icon-btn" onClick={() => editor?.chain().focus().redo().run()} disabled={disabled || !editor?.can().redo()}><Redo2 size={16} /><span>Redo</span></button>
-						<button type="button" onMouseDown={keepSelection} className="toolbar-icon-btn" onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()} disabled={disabled}><Eraser size={16} /><span>Clear</span></button>
+						<button type="button" onMouseDown={keepSelection} className="toolbar-icon-btn" onClick={() => runWithSelection((chain) => chain.undo())} disabled={disabled || !editor?.can().undo()}><Undo2 size={16} /><span>Undo</span></button>
+						<button type="button" onMouseDown={keepSelection} className="toolbar-icon-btn" onClick={() => runWithSelection((chain) => chain.redo())} disabled={disabled || !editor?.can().redo()}><Redo2 size={16} /><span>Redo</span></button>
+						<button type="button" onMouseDown={keepSelection} className="toolbar-icon-btn" onClick={() => runWithSelection((chain) => chain.clearNodes().unsetAllMarks())} disabled={disabled}><Eraser size={16} /><span>Clear</span></button>
 					</div>
 				</div>
 			) : null}
