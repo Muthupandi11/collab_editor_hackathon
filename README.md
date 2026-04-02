@@ -1,58 +1,196 @@
-# Real-time Collaborative Text Editor
+# CollabEditor - Real-time Collaborative Text Editor
 
-Hackathon project scaffold for a Google Docs-like collaborative editor using:
+CollabEditor is a Google Docs-like collaborative editor built for hackathon delivery.
+It supports multi-user editing, presence, revision history, chat, and import/export workflows.
 
-- Frontend: React + TipTap + Yjs
-- Backend: Node.js + Express + Socket.IO
-- Database: MongoDB Atlas
+## 1. Project Overview
 
-## Workspace Layout
+### Core capabilities
+- Real-time text synchronization across multiple users (Yjs + Socket.IO).
+- User presence indicators (who is online, who is currently editing).
+- Colored cursor tracking per user.
+- Revision history with restore support.
+- In-app collaboration chat.
+- Import support (PDF, DOCX, Google Docs via backend proxy).
+- Export support (TXT, JSON, HTML, Markdown, Word-compatible, PDF print flow).
+
+### Repository layout
 
 ```text
-backend/    Express API, Socket.IO, Yjs sync, MongoDB persistence
-frontend/   React app, TipTap editor, presence UI
-docs/       Architecture, API notes, deployment notes
-scripts/    Local development helper scripts
+backend/    Express API, Socket.IO collaboration server, MongoDB persistence
+frontend/   React + Vite app, TipTap editor, collaboration UI
+docs/       Deployment and API notes
+scripts/    Utility scripts
 ```
 
-## Build Plan
+## 2. Tech Stack
 
-- Step 1: Folder structure and baseline config
-- Step 2: Backend setup with Express + Socket.IO + Yjs wiring
-- Step 3: MongoDB models and revision schema
-- Step 4: Frontend editor integration (TipTap + Yjs + cursors)
-- Step 5: Presence indicators
-- Step 6: Revision history and restore
-- Step 7: UX polish and responsive layout
-- Step 8: Deployment setup (Vercel + Render + Atlas)
+### Frontend
+- React 18
+- Vite
+- TipTap editor
+- Yjs + y-protocols + y-prosemirror
+- Socket.IO client
+- Lucide React icons
+- pdfjs-dist (PDF import)
+- mammoth (DOCX import)
 
-## Local Run
+### Backend
+- Node.js (ES modules)
+- Express
+- Socket.IO
+- Yjs + y-protocols
+- Mongoose
+- MongoDB Atlas
 
-1. Backend:
+### Deployment
+- Frontend: Vercel
+- Backend: Render/Railway-style Node web service
+- Database: MongoDB Atlas
+
+## 3. Architecture Overview
+
+### High-level flow
+
+```text
+Browser A (React + TipTap)      Browser B (React + TipTap)
+		  |                                 |
+		  |---- Socket.IO realtime ---------|
+		  |                \               /
+		  |                 \             /
+		  |                Express + Socket.IO server
+		  |                         |
+		  |---------------- REST API|
+									|
+								MongoDB Atlas
+					(documents, metadata, revisions)
+```
+
+### Data and sync model
+- TipTap uses the Yjs document as collaborative source of truth for live editing.
+- Socket.IO transports Yjs updates and awareness events (presence/cursor metadata).
+- REST API handles document metadata, history listing, manual save/restore, import/export-related calls.
+- Revision snapshots are persisted in MongoDB for history and recovery.
+
+### Conflict resolution strategy
+- Concurrent edits are resolved via Yjs CRDT merge semantics.
+- Users can type in overlapping regions; updates converge without manual merge dialogs.
+
+## 4. Setup Instructions
+
+### Prerequisites
+- Node.js 18+
+- npm 9+
+- MongoDB Atlas URI (or local MongoDB)
+
+### Step A: Backend setup
 
 ```bash
 cd backend
 npm install
+```
+
+Create `backend/.env` with at least:
+
+```env
+MONGODB_URI=<your_mongodb_connection_string>
+PORT=4000
+CLIENT_ORIGIN=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
+NODE_ENV=development
+```
+
+Start backend:
+
+```bash
 npm run dev
 ```
 
-2. Frontend:
+### Step B: Frontend setup
 
 ```bash
 cd frontend
 npm install
+```
+
+Create `frontend/.env`:
+
+```env
+VITE_BACKEND_URL=http://localhost:4000
+```
+
+Start frontend:
+
+```bash
 npm run dev
 ```
 
-3. Open `http://localhost:5173/doc/demo-room`.
+### Step C: Open the app
+- Visit `http://localhost:5173/?room=demo-room`
+- Open the same URL in a second tab/window with a different user name.
 
-## Deployment
+## 5. Environment Variables
 
-- Backend deploy config: [render.yaml](render.yaml)
-- Frontend deploy config: [frontend/vercel.json](frontend/vercel.json)
-- Full guide: [docs/deployment.md](docs/deployment.md)
+### Backend variables
+- `MONGODB_URI` (required): MongoDB connection string.
+- `PORT` (optional): backend port (`4000` locally).
+- `CLIENT_ORIGIN` (recommended): allowed frontend origin for CORS.
+- `FRONTEND_URL` (optional): additional allowed frontend origin.
+- `NODE_ENV` (optional): `development` or `production`.
 
-Required production variables:
+### Frontend variables
+- `VITE_BACKEND_URL` (recommended): base backend URL.
+- `VITE_API_URL` (fallback supported).
+- `VITE_SOCKET_URL` (fallback supported).
 
-- Backend (`Render`): `MONGODB_URI`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLIENT_ORIGIN`
-- Frontend (`Vercel`): `VITE_API_URL`, `VITE_SOCKET_URL`
+## 6. Run and Verify
+
+### Local verification checklist
+1. Open app in two tabs with same room ID.
+2. Type in tab A and verify instant reflection in tab B.
+3. Confirm presence panel shows both users online.
+4. Confirm cursor labels are visible and color-coded.
+5. Save (`Ctrl+S`) and verify history updates.
+6. Restore a revision and verify both tabs converge.
+
+## 7. Deployment Notes
+
+### Frontend (Vercel)
+- Project root: `frontend`
+- Build command: `npm run build`
+- Output: Vite `dist`
+
+### Backend (Render/Node)
+- Project root: `backend`
+- Build command: `npm install`
+- Start command: `npm start`
+- Health endpoint: `/health`
+
+See full deployment guide in `docs/deployment.md`.
+
+## 8. AI Tools Used
+
+This project has been AI-assisted during implementation and debugging.
+
+- GitHub Copilot Chat
+- GPT-5.3-Codex model (via Copilot tooling)
+
+AI assistance was used for:
+- Iterative bug triage and patch drafting
+- Refactoring and realtime sync hardening
+- Documentation and deployment guidance
+
+## 9. Known Limitations
+
+- No full automated test suite yet (manual validation is primary).
+- Large frontend bundle size warning in production builds.
+- Chat/history scale is tuned for hackathon usage, not large enterprise load.
+- Restore flow and revision UX are functional but can be further optimized for very high-frequency edits.
+- Security hardening (strict CORS/domain lockdown, rate limits, auth) should be strengthened for production beyond hackathon scope.
+
+## 10. Future Improvements
+
+- Add integration and E2E tests for multi-user scenarios.
+- Add structured observability (metrics, tracing, error dashboards).
+- Improve bundle splitting and performance budgets.
+- Add stronger role-based auth and document access controls.
