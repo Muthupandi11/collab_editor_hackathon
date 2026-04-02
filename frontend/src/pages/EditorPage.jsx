@@ -55,6 +55,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	} = useCollaboration({ documentId, currentUser: collaborationUser });
 
 	const editorRef = useRef(null);
+	const initialRoomLoadRef = useRef(null);
 	const hasUnsavedChanges = useRef(false);
 	const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
 	const [showExportMenu, setShowExportMenu] = useState(false);
@@ -155,9 +156,13 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			const content = payload?.content || payload?.document?.content || "";
 			const savedTitle = payload?.title || payload?.document?.title || "Untitled Document";
 
-			if (content) {
+			const currentText = editorRef.current.getText?.() || "";
+			const shouldHydrateContent = currentText.trim().length === 0 && initialRoomLoadRef.current !== documentId;
+
+			if (content && shouldHydrateContent) {
 				editorRef.current.commands.setContent(content, false);
 				hasUnsavedChanges.current = false;
+				initialRoomLoadRef.current = documentId;
 			}
 			setTitle(savedTitle);
 		} catch (error) {
@@ -202,6 +207,10 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			loadDocument();
 		}
 	}, [ready, documentId, loadDocument]);
+
+	useEffect(() => {
+		initialRoomLoadRef.current = null;
+	}, [documentId]);
 
 	useEffect(() => {
 		if (!ready || documentRestoreTick === 0) {
@@ -480,6 +489,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 				onRequestIdentityEdit={onRequestIdentityEdit}
 				soundEnabled={currentUser.soundEnabled !== false}
 				onToggleSound={onToggleSound}
+				activeEditors={typingUsernames}
 			/>
 			{showExportMenu ? (
 				<div className="export-menu">

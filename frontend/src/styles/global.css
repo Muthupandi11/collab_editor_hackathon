@@ -862,6 +862,29 @@ body {
 	align-items: center;
 }
 
+.header-editing-indicator {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-secondary);
+	padding: 4px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--bg-surface);
+}
+
+.header-editing-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--primary-light);
+	color: var(--primary-dark);
+	font-weight: 700;
+}
+
 .avatar-pill,
 .avatar-overflow {
 	width: 32px;

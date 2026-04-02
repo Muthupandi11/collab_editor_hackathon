@@ -30,7 +30,8 @@ export default function EditorHeader({
 	currentUser,
 	onRequestIdentityEdit,
 	soundEnabled,
-	onToggleSound
+	onToggleSound,
+	activeEditors = []
 }) {
 	const [showProfileMenu, setShowProfileMenu] = useState(false);
 	const visibleUsers = users.slice(0, 4);
@@ -90,6 +91,15 @@ export default function EditorHeader({
 					))}
 					{overflow > 0 ? <div className="avatar-overflow">+{overflow}</div> : null}
 				</div>
+				{activeEditors.length > 0 ? (
+					<div className="header-editing-indicator" title="Currently editing">
+						<span>Editing:</span>
+						{activeEditors.slice(0, 2).map((name) => (
+							<span key={name} className="header-editing-chip">{name}</span>
+						))}
+						{activeEditors.length > 2 ? <span className="header-editing-chip">+{activeEditors.length - 2}</span> : null}
+					</div>
+				) : null}
 				<div className="brand-divider" />
 				<div className="room-chip">Room: {roomId}</div>
 				<button type="button" className="header-btn" onClick={onShare}><Share2 size={15} /> Share</button>
