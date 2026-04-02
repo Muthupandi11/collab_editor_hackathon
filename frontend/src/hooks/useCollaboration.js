@@ -217,6 +217,8 @@ export function useCollaboration({ documentId, currentUser }) {
 			setConnectionStatus("offline");
 			setConnectionMessage("Offline");
 			setSaveStatus((prev) => (prev === "saving" ? "error" : prev));
+			setTypingUsers([]);
+			setRemoteCursors([]);
 			if (latencyIntervalRef.current) {
 				clearInterval(latencyIntervalRef.current);
 				latencyIntervalRef.current = null;
@@ -300,7 +302,7 @@ export function useCollaboration({ documentId, currentUser }) {
 			}
 			setRemoteCursors((prev) => {
 				const filtered = prev.filter((entry) => entry.userId !== payload.userId);
-				return [...filtered, payload].slice(-50);
+				return [...filtered, { ...payload, timestamp: payload.timestamp || Date.now() }].slice(-50);
 			});
 		};
 
@@ -430,6 +432,14 @@ export function useCollaboration({ documentId, currentUser }) {
 			}
 		};
 	}, [awareness, currentUser, documentId, ydoc]);
+
+	useEffect(() => {
+		const cleanup = setInterval(() => {
+			setRemoteCursors((prev) => prev.filter((entry) => Date.now() - (entry.timestamp || 0) < 4000));
+		}, 1000);
+
+		return () => clearInterval(cleanup);
+	}, []);
 
 	/**
 	 * Signals typing state to collaborators with a 2-second inactivity timeout.

@@ -162,44 +162,46 @@ export function registerCollaborationSocket(io) {
 			socket.to(documentId).emit("awareness-update", payload);
 		});
 
-		socket.on("typing-start", ({ roomId, userId, username }) => {
-			if (!roomId || !userId) {
+		socket.on("typing-start", ({ roomId, username }) => {
+			if (!roomId) {
 				return;
 			}
 
+			const participantId = socket.id;
 			const resolvedName = socket.data?.user?.name || username || "Someone";
 
 			const roomUsers = roomTyping.get(roomId) || new Map();
-			const existing = roomUsers.get(userId);
+			const existing = roomUsers.get(participantId);
 			if (existing?.timeout) {
 				clearTimeout(existing.timeout);
 			}
 
 			const timeout = setTimeout(() => {
 				const nextRoomUsers = roomTyping.get(roomId);
-				nextRoomUsers?.delete(userId);
-				socket.to(roomId).emit("user-stopped-typing", { roomId, userId });
-				socket.to(roomId).emit("user-stopped", { roomId, userId });
+				nextRoomUsers?.delete(participantId);
+				socket.to(roomId).emit("user-stopped-typing", { roomId, userId: participantId });
+				socket.to(roomId).emit("user-stopped", { roomId, userId: participantId });
 			}, 3000);
 
-			roomUsers.set(userId, { username: resolvedName, timeout });
+			roomUsers.set(participantId, { username: resolvedName, timeout });
 			roomTyping.set(roomId, roomUsers);
-			socket.to(roomId).emit("user-typing", { roomId, userId, username: resolvedName });
+			socket.to(roomId).emit("user-typing", { roomId, userId: participantId, username: resolvedName });
 		});
 
-		socket.on("typing-stop", ({ roomId, userId }) => {
-			if (!roomId || !userId) {
+		socket.on("typing-stop", ({ roomId }) => {
+			if (!roomId) {
 				return;
 			}
 
+			const participantId = socket.id;
 			const roomUsers = roomTyping.get(roomId);
-			const entry = roomUsers?.get(userId);
+			const entry = roomUsers?.get(participantId);
 			if (entry?.timeout) {
 				clearTimeout(entry.timeout);
 			}
-			roomUsers?.delete(userId);
-			socket.to(roomId).emit("user-stopped-typing", { roomId, userId });
-			socket.to(roomId).emit("user-stopped", { roomId, userId });
+			roomUsers?.delete(participantId);
+			socket.to(roomId).emit("user-stopped-typing", { roomId, userId: participantId });
+			socket.to(roomId).emit("user-stopped", { roomId, userId: participantId });
 		});
 
 		const handleIncomingMessage = ({ message, roomId, userId, username, color }) => {
@@ -283,7 +285,7 @@ export function registerCollaborationSocket(io) {
 			const resolvedUser = socket.data?.user || {};
 
 			socket.to(roomId).emit("cursor-update", {
-				userId: userId || resolvedUser.id || socket.id,
+				userId: socket.id,
 				username: resolvedUser.name || username || "Guest",
 				color: resolvedUser.color || color || "#2563EB",
 				position,
