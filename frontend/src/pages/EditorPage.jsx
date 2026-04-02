@@ -69,6 +69,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	const [restoringId, setRestoringId] = useState(null);
 	const [loadingDocument, setLoadingDocument] = useState(false);
 	const [lastSavedAt, setLastSavedAt] = useState(null);
+	const [localSelection, setLocalSelection] = useState({ from: 1, to: 1 });
 
 	const parseJsonSafely = async (response, url) => {
 		const contentType = response.headers.get("content-type") || "";
@@ -537,8 +538,16 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 						onEditorReady={(editor) => {
 							editorRef.current = editor;
 						}}
-						onSelectionChange={handleSelectionChange}
+									onSelectionChange={(selection) => {
+										handleSelectionChange(selection);
+										setLocalSelection(selection || { from: 1, to: 1 });
+									}}
 						remoteCursors={remoteCursors}
+									localCursor={{
+										name: currentUser.name,
+										color: currentUser.color,
+										selection: localSelection
+									}}
 					/>
 
 					<div className="word-count-bar">
