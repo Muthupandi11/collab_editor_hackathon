@@ -19,10 +19,10 @@ CollabEditor solves this by providing a Google Docs-like experience with live co
 - Backend URL: https://collabeditorhackathon-production.up.railway.app
 - Frontend URL: https://collab-editor-frontend-roan.vercel.app/
 - GitHub Repository: https://github.com/Muthupandi11/collab_editor_hackathon
-- MongoDB Connection (provided for hackathon setup): mongodb+srv://collab_admin:admin123@collab-cluster.aikvnvv.mongodb.net/?appName=collab-cluster
+- MongoDB Connection: set via `MONGODB_URI` environment variable (not committed to repository)
 
 Security note:
-- This MongoDB credential is included as requested for submission context. Rotate this credential immediately after judging/demo.
+- Never commit database credentials in source control. Use environment variables and secret managers.
 
 ## 1. Project Overview
 
