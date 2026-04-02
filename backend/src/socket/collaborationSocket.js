@@ -11,6 +11,7 @@ const roomHydrationJobs = new Map();
 const roomTitles = new Map();
 const roomTyping = new Map();
 const roomChats = new Map();
+const roomReactions = new Map();
 
 /**
  * Returns an existing room or creates a new in-memory room.
@@ -64,6 +65,7 @@ function cleanupRoomIfEmpty(documentId) {
 	roomTitles.delete(documentId);
 	roomTyping.delete(documentId);
 	roomChats.delete(documentId);
+	roomReactions.delete(documentId);
 	logInfo("Room cleaned up", { documentId });
 }
 
@@ -83,21 +85,28 @@ export function registerCollaborationSocket(io) {
 			}
 		});
 
-		socket.on("join-document", ({ documentId, user }) => {
+		socket.on("join-document", (payload = {}) => {
+			const documentId = payload.documentId || payload.roomId;
 			if (!documentId) {
 				return;
 			}
 
+			const resolvedUser = payload.user || {
+				id: payload.userId || socket.id,
+				name: payload.username || `Guest-${Math.floor(1000 + Math.random() * 9000)}`,
+				color: payload.color || "#2563EB"
+			};
+
 			socket.data.documentId = documentId;
-			socket.data.user = user || null;
+			socket.data.user = resolvedUser;
 			socket.join(documentId);
 
 			const room = getOrCreateRoom(documentId);
 			room.clients.add(socket.id);
 
 			upsertDocument(documentId, {
-				createdBy: user?.name || "anonymous",
-				updatedBy: user?.name || "anonymous"
+				createdBy: resolvedUser?.name || "anonymous",
+				updatedBy: resolvedUser?.name || "anonymous"
 			}).catch(() => {
 				// Avoid failing join flow if metadata upsert fails.
 			});
@@ -191,7 +200,7 @@ export function registerCollaborationSocket(io) {
 			socket.to(roomId).emit("user-stopped", { roomId, userId });
 		});
 
-		socket.on("chat-message", ({ message, roomId, userId, username, color }) => {
+		const handleIncomingMessage = ({ message, roomId, userId, username, color }) => {
 			if (!roomId || typeof message !== "string") {
 				return;
 			}
@@ -203,8 +212,8 @@ export function registerCollaborationSocket(io) {
 
 			const msg = {
 				id: `${Date.now()}-${Math.random()}`,
-				userId: userId || socket.id,
-				username: username || "Guest",
+				userId: userId || socket.data?.user?.id || socket.id,
+				username: username || socket.data?.user?.name || "Guest",
 				color: color || "#2563EB",
 				message: trimmed,
 				timestamp: new Date().toISOString()
@@ -220,6 +229,48 @@ export function registerCollaborationSocket(io) {
 			}
 
 			io.to(roomId).emit("new-message", msg);
+			io.to(roomId).emit("receive-message", msg);
+		};
+
+		socket.on("chat-message", handleIncomingMessage);
+		socket.on("send-message", handleIncomingMessage);
+
+		socket.on("message-reaction", ({ roomId, messageId, emoji, userId }) => {
+			if (!roomId || !messageId || !emoji) {
+				return;
+			}
+
+			if (!roomReactions.has(roomId)) {
+				roomReactions.set(roomId, new Map());
+			}
+			const reactionsByMessage = roomReactions.get(roomId);
+			if (!reactionsByMessage.has(messageId)) {
+				reactionsByMessage.set(messageId, new Map());
+			}
+
+			const emojiBucket = reactionsByMessage.get(messageId);
+			if (!emojiBucket.has(emoji)) {
+				emojiBucket.set(emoji, new Set());
+			}
+
+			const users = emojiBucket.get(emoji);
+			const reactionUser = String(userId || socket.data?.user?.id || socket.id);
+			if (users.has(reactionUser)) {
+				users.delete(reactionUser);
+			} else {
+				users.add(reactionUser);
+			}
+
+			const reactionPayload = Array.from(emojiBucket.entries()).map(([key, value]) => ({
+				emoji: key,
+				count: value.size
+			}));
+
+			io.to(roomId).emit("message-reaction-updated", {
+				roomId,
+				messageId,
+				reactions: reactionPayload
+			});
 		});
 
 		socket.on("cursor-move", ({ userId, username, color, position, roomId }) => {
@@ -255,7 +306,7 @@ export function registerCollaborationSocket(io) {
 			}
 		});
 
-			socket.on("restore-document", async ({ documentId, revisionId, restoredBy }, ack) => {
+		socket.on("restore-document", async ({ documentId, revisionId, restoredBy }, ack) => {
 				if (!documentId || !revisionId) {
 					if (typeof ack === "function") {
 						ack({ ok: false, message: "documentId and revisionId are required." });
@@ -292,7 +343,7 @@ export function registerCollaborationSocket(io) {
 						ack({ ok: false, message: error.message });
 					}
 				}
-			});
+		});
 
 		socket.on("disconnect", () => {
 			const { documentId } = socket.data;

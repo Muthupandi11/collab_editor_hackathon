@@ -37,6 +37,15 @@ const documentSchema = new Schema(
 			default: "Untitled Document",
 			trim: true
 		},
+		content: {
+			type: String,
+			default: ""
+		},
+		lastModified: {
+			type: Date,
+			default: Date.now,
+			index: true
+		},
 		yjsState: {
 			type: Buffer,
 			default: () => Buffer.from([])

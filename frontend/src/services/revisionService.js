@@ -4,58 +4,46 @@ const BACKEND_URL =
 	import.meta.env.VITE_API_URL ||
 	"http://localhost:4000";
 
+function timeoutSignal(ms = 10000) {
+	if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+		return AbortSignal.timeout(ms);
+	}
+
+	const controller = new AbortController();
+	setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), ms);
+	return controller.signal;
+}
+
 /**
  * Fetch revision history for a document
  * @param {string} docId - Document ID
  * @returns {Promise<Array>} Array of revision objects with timestamp, content, author
  */
 export const fetchRevisions = async (docId) => {
-	const endpoint = `${BACKEND_URL}/api/documents/${docId}/revisions`;
+	const endpoint = `${BACKEND_URL.replace(/\/$/, "")}/api/revisions/${docId}`;
 
 	try {
 		const response = await fetch(endpoint, {
 			method: "GET",
 			credentials: "include",
-			headers: { "Content-Type": "application/json" }
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json"
+			},
+			signal: timeoutSignal(10000)
 		});
 
 		if (!response.ok) {
-			console.error("Revision fetch failed", {
-				status: response.status,
-				statusText: response.statusText,
-				endpoint
-			});
-			throw new Error("Backend offline - revisions unavailable");
+			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 		}
 
 		const data = await response.json();
-		return data.revisions || [];
+		return data?.revisions || [];
 	} catch (error) {
-		console.error("Error fetching revisions (attempt 1):", error);
-		await new Promise((resolve) => setTimeout(resolve, 2000));
-
-		try {
-			const retryResponse = await fetch(endpoint, {
-				method: "GET",
-				credentials: "include",
-				headers: { "Content-Type": "application/json" }
-			});
-
-			if (!retryResponse.ok) {
-				console.error("Revision fetch failed after retry", {
-					status: retryResponse.status,
-					statusText: retryResponse.statusText,
-					endpoint
-				});
-				throw new Error("Backend offline - revisions unavailable");
-			}
-
-			const retryData = await retryResponse.json();
-			return retryData.revisions || [];
-		} catch (retryError) {
-			console.error("Error fetching revisions (retry):", retryError);
-			throw new Error("Backend offline - revisions unavailable");
+		if (error?.name === "AbortError" || error?.name === "TimeoutError") {
+			throw new Error("Request timed out");
 		}
+		throw new Error(error?.message || "Failed to load revisions");
 	}
 };
 
@@ -69,23 +57,22 @@ export const fetchRevisions = async (docId) => {
 export const saveRevision = async (docId, content, author) => {
 	try {
 		const response = await fetch(
-			`${BACKEND_URL}/api/revisions`,
+			`${BACKEND_URL.replace(/\/$/, "")}/api/revisions`,
 			{
 				method: "POST",
 				credentials: "include",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ docId, content, author })
+				body: JSON.stringify({ docId, content, author, roomId: docId })
 			}
 		);
 
 		if (!response.ok) {
-			throw new Error(`Failed to save revision: ${response.statusText}`);
+			throw new Error(`Failed to save revision: HTTP ${response.status}`);
 		}
 
 		return await response.json();
 	} catch (error) {
-		console.error("Error saving revision:", error.message);
-		throw error;
+		throw new Error(error?.message || "Failed to save revision");
 	}
 };
 
@@ -94,24 +81,24 @@ export const saveRevision = async (docId, content, author) => {
  * @param {string} revisionId - Revision ID to restore
  * @returns {Promise<Object>} Restored revision content
  */
-export const restoreRevision = async (revisionId) => {
+export const restoreRevision = async (docId, revisionId) => {
 	try {
 		const response = await fetch(
-			`${BACKEND_URL}/api/revisions/restore/${revisionId}`,
+			`${BACKEND_URL.replace(/\/$/, "")}/api/revisions/restore/${revisionId}`,
 			{
 				method: "POST",
 				credentials: "include",
-				headers: { "Content-Type": "application/json" }
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ docId })
 			}
 		);
 
 		if (!response.ok) {
-			throw new Error(`Failed to restore revision: ${response.statusText}`);
+			throw new Error(`Failed to restore revision: HTTP ${response.status}`);
 		}
 
 		return await response.json();
 	} catch (error) {
-		console.error("Error restoring revision:", error.message);
-		throw error;
+		throw new Error(error?.message || "Failed to restore revision");
 	}
 };

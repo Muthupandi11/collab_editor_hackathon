@@ -263,9 +263,26 @@ export function useCollaboration({ documentId, currentUser }) {
 				return;
 			}
 			setChatMessages((prev) => {
-				const next = [...prev, message];
+				const hasMessage = prev.some((entry) => String(entry.id) === String(message.id));
+				if (hasMessage) {
+					return prev;
+				}
+				const next = [...prev, { ...message, reactions: message.reactions || [] }];
 				return next.length > 50 ? next.slice(-50) : next;
 			});
+		};
+
+		const handleReactionUpdated = ({ messageId, reactions }) => {
+			if (!messageId) {
+				return;
+			}
+			setChatMessages((prev) =>
+				prev.map((message) =>
+					String(message.id) === String(messageId)
+						? { ...message, reactions: Array.isArray(reactions) ? reactions : [] }
+						: message
+				)
+			);
 		};
 
 		const handleCursorUpdate = (payload) => {
@@ -287,6 +304,10 @@ export function useCollaboration({ documentId, currentUser }) {
 		socket.on("connect", () => {
 			socket.emit("join-document", {
 				documentId,
+				roomId: documentId,
+				userId: currentUser.id,
+				username: currentUser.name,
+				color: currentUser.color,
 				user: currentUser
 			});
 
@@ -337,6 +358,8 @@ export function useCollaboration({ documentId, currentUser }) {
 		socket.on("title-updated", handleTitleUpdated);
 		socket.on("chat-history", handleChatHistory);
 		socket.on("new-message", handleNewMessage);
+		socket.on("receive-message", handleNewMessage);
+		socket.on("message-reaction-updated", handleReactionUpdated);
 		socket.on("cursor-update", handleCursorUpdate);
 
 		socket.on("document-state", handleRemoteYjsUpdate);
@@ -362,6 +385,8 @@ export function useCollaboration({ documentId, currentUser }) {
 			socket.off("title-updated", handleTitleUpdated);
 			socket.off("chat-history", handleChatHistory);
 			socket.off("new-message", handleNewMessage);
+			socket.off("receive-message", handleNewMessage);
+			socket.off("message-reaction-updated", handleReactionUpdated);
 			socket.off("cursor-update", handleCursorUpdate);
 			socket.disconnect();
 			socketRef.current = null;
@@ -397,7 +422,7 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		socketRef.current.emit("typing-start", {
 			roomId: documentId,
-			userId: awareness.clientID,
+			userId: currentUser.id,
 			username: currentUser.name
 		});
 
@@ -408,7 +433,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		typingStopTimerRef.current = setTimeout(() => {
 			socketRef.current?.emit("typing-stop", {
 				roomId: documentId,
-				userId: awareness.clientID
+				userId: currentUser.id
 			});
 		}, 2000);
 	}
@@ -448,12 +473,32 @@ export function useCollaboration({ documentId, currentUser }) {
 			return;
 		}
 
-		socketRef.current.emit("chat-message", {
+		socketRef.current.emit("send-message", {
 			message,
 			roomId: documentId,
-			userId: awareness.clientID,
+			userId: currentUser.id,
 			username: currentUser.name,
 			color: currentUser.color
+		});
+	}
+
+	/**
+	 * Emits message reaction update for a chat message.
+	 * @param {string} messageId - Target message identifier.
+	 * @param {string} emoji - Emoji reaction token.
+	 * @returns {void}
+	 */
+	function reactToMessage(messageId, emoji) {
+		if (!socketRef.current?.connected || !messageId || !emoji) {
+			return;
+		}
+
+		socketRef.current.emit("message-reaction", {
+			roomId: documentId,
+			messageId,
+			emoji,
+			userId: currentUser.id,
+			username: currentUser.name
 		});
 	}
 
@@ -469,7 +514,7 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		socketRef.current.emit("cursor-move", {
 			roomId: documentId,
-			userId: awareness.clientID,
+			userId: currentUser.id,
 			username: currentUser.name,
 			color: currentUser.color,
 			position
@@ -559,6 +604,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		updateDocumentTitle,
 		retryConnection,
 		sendChatMessage,
+		reactToMessage,
 		reportCursorMove,
 		forceSave,
 		requestRevisionRestore

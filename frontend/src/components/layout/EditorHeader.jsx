@@ -1,4 +1,5 @@
-import { Download, Moon, Pencil, Share2, Sun } from "lucide-react";
+import { Bell, BellOff, Download, Moon, Pencil, Share2, Sun } from "lucide-react";
+import { useState } from "react";
 
 /**
  * Top fixed editor header with title input and actions.
@@ -24,8 +25,13 @@ export default function EditorHeader({
 	onToggleTheme,
 	onShare,
 	onExport,
-	connectionBadge
+	connectionBadge,
+	currentUser,
+	onRequestIdentityEdit,
+	soundEnabled,
+	onToggleSound
 }) {
+	const [showProfileMenu, setShowProfileMenu] = useState(false);
 	const visibleUsers = users.slice(0, 4);
 	const overflow = Math.max(0, users.length - 4);
 
@@ -45,6 +51,31 @@ export default function EditorHeader({
 				/>
 			</div>
 			<div className="header-right">
+				<div className="profile-anchor">
+					<button
+						type="button"
+						className="profile-pill"
+						onClick={() => setShowProfileMenu((prev) => !prev)}
+					>
+						<span className="profile-avatar" style={{ backgroundColor: currentUser?.color || "#2563EB" }}>
+							{(currentUser?.name || "U").slice(0, 1).toUpperCase()}
+						</span>
+						<span>{currentUser?.name || "User"}</span>
+					</button>
+					{showProfileMenu ? (
+						<div className="profile-popover">
+							<button
+								type="button"
+								onClick={() => {
+									setShowProfileMenu(false);
+									onRequestIdentityEdit?.();
+								}}
+							>
+								Change name
+							</button>
+						</div>
+					) : null}
+				</div>
 				<div className="avatar-stack">
 					{visibleUsers.map((user, index) => (
 						<div
@@ -62,6 +93,9 @@ export default function EditorHeader({
 				<div className="room-chip">Room: {roomId}</div>
 				<button type="button" className="header-btn" onClick={onShare}><Share2 size={15} /> Share</button>
 				<button type="button" className="header-btn" onClick={onExport}><Download size={15} /> Export</button>
+				<button type="button" className="icon-btn" onClick={onToggleSound} aria-label="Toggle sound">
+					{soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+				</button>
 				<button type="button" className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
 					{darkMode ? <Sun size={16} /> : <Moon size={16} />}
 				</button>

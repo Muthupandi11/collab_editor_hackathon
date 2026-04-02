@@ -20,6 +20,7 @@ export async function getDocumentById(documentId) {
 export async function upsertDocument(documentId, payload = {}) {
 	const {
 		title,
+		content,
 		yjsState,
 		updatedBy = "anonymous",
 		createdBy = "anonymous"
@@ -33,9 +34,15 @@ export async function upsertDocument(documentId, payload = {}) {
 		setPayload.title = title.trim();
 	}
 
+	if (typeof content === "string") {
+		setPayload.content = content;
+	}
+
 	if (yjsState) {
 		setPayload.yjsState = Buffer.from(yjsState);
 	}
+
+	setPayload.lastModified = new Date();
 
 	return Document.findOneAndUpdate(
 		{ documentId },
@@ -66,6 +73,8 @@ export async function appendRevision(documentId, revision) {
 		createdBy: revision.createdBy || "system",
 		summary: revision.summary || "Auto snapshot"
 	};
+	const latestContent = typeof revision.content === "string" ? revision.content : undefined;
+	const latestTitle = typeof revision.title === "string" ? revision.title : undefined;
 
 	return Document.findOneAndUpdate(
 		{ documentId },
@@ -76,7 +85,13 @@ export async function appendRevision(documentId, revision) {
 					$slice: -MAX_REVISION_COUNT
 				}
 			},
-			$set: { yjsState: snapshotEntry.snapshot, updatedBy: snapshotEntry.createdBy },
+			$set: {
+				yjsState: snapshotEntry.snapshot,
+				updatedBy: snapshotEntry.createdBy,
+				lastModified: new Date(),
+				...(latestContent !== undefined ? { content: latestContent } : {}),
+				...(latestTitle ? { title: latestTitle } : {})
+			},
 			$setOnInsert: {
 				documentId,
 				createdBy: snapshotEntry.createdBy
@@ -104,11 +119,12 @@ export async function listRevisions(documentId, limit = 20) {
 
 	return [...doc.revisions]
 		.reverse()
-		.map((revision) => ({
+		.map((revision, index) => ({
 			_id: revision._id,
 			createdAt: revision.createdAt,
 			createdBy: revision.createdBy,
-			summary: revision.summary
+			summary: revision.summary,
+			version: index + 1
 		}));
 }
 
@@ -131,8 +147,17 @@ export async function restoreRevision(documentId, revisionId, restoredBy = "syst
 	}
 
 	const snapshot = Buffer.from(target.snapshot);
+	let restoredContent = "";
+	try {
+		const decoded = JSON.parse(snapshot.toString("utf8"));
+		restoredContent = typeof decoded?.content === "string" ? decoded.content : "";
+	} catch {
+		restoredContent = "";
+	}
 	doc.yjsState = snapshot;
+	doc.content = restoredContent || doc.content;
 	doc.updatedBy = restoredBy;
+	doc.lastModified = new Date();
 	doc.revisions.push({
 		snapshot,
 		summary: `Restored revision ${revisionId}`,
@@ -144,7 +169,7 @@ export async function restoreRevision(documentId, revisionId, restoredBy = "syst
 	}
 
 	await doc.save();
-	return snapshot;
+	return { snapshot, content: restoredContent };
 }
 
 /**
@@ -168,12 +193,18 @@ export async function saveRevision(documentId, content, author = "Unknown") {
 	try {
 		// Create a buffer from the content string (simplified serialization)
 		// In production, you'd want to encode this as Yjs binary
-		const snapshot = Buffer.from(JSON.stringify({ content }));
+		const snapshot = Buffer.from(JSON.stringify({ content }), "utf8");
+		const preview = String(content)
+			.replace(/<[^>]*>/g, " ")
+			.replace(/\s+/g, " ")
+			.trim()
+			.slice(0, 100) || "Snapshot";
 		
 		const result = await appendRevision(documentId, {
 			snapshot,
+			content,
 			createdBy: author,
-			summary: `Saved by ${author}` 
+			summary: preview
 		});
 
 		// Return the latest revision metadata

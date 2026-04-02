@@ -11,9 +11,9 @@ router.get("/:docId", async (req, res) => {
 	try {
 		const { docId } = req.params;
 		const revisions = await revisionService.getRevisions(docId, 20);
-		res.json({ revisions });
+		res.json({ success: true, revisions });
 	} catch (error) {
-		res.status(500).json({ error: error.message });
+		res.status(500).json({ success: false, error: error.message });
 	}
 });
 
@@ -31,9 +31,9 @@ router.post("/", async (req, res) => {
 		}
 
 		const revision = await revisionService.saveRevision(docId, content, author || "Unknown");
-		res.status(201).json(revision);
+		res.status(201).json({ success: true, revision });
 	} catch (error) {
-		res.status(500).json({ error: error.message });
+		res.status(500).json({ success: false, error: error.message });
 	}
 });
 
@@ -50,14 +50,20 @@ router.post("/restore/:revisionId", async (req, res) => {
 			return res.status(400).json({ error: "docId is required" });
 		}
 
-		const snapshot = await revisionService.restoreRevision(docId, revisionId, restoredBy || "system");
-		if (!snapshot) {
+		const restored = await revisionService.restoreRevision(docId, revisionId, restoredBy || "system");
+		if (!restored) {
 			return res.status(404).json({ error: "Revision not found" });
 		}
 
-		res.json({ ok: true, revisionId, docId });
+		res.json({
+			success: true,
+			revisionId,
+			docId,
+			content: restored.content || "",
+			snapshot: restored.snapshot.toString("base64")
+		});
 	} catch (error) {
-		res.status(500).json({ error: error.message });
+		res.status(500).json({ success: false, error: error.message });
 	}
 });
 

@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import AppLayout from "../components/layout/AppLayout.jsx";
 import EditorPage from "../pages/EditorPage.jsx";
-import { getColorBySeed } from "../lib/colors.js";
 import { useEffect } from "react";
 import { startKeepAlive } from "../utils/keepAlive.js";
 import { nanoid } from "nanoid";
 import ToastViewport from "../components/ui/ToastViewport.jsx";
+import JoinModal from "../components/auth/JoinModal.jsx";
+import { toast } from "../lib/toast.js";
 
 /**
  * Parses URL path to fetch document room ID.
@@ -26,35 +27,87 @@ function resolveDocumentIdFromLocation() {
 	return generatedRoom;
 }
 
-/**
- * Generates a local fallback display name.
- * @returns {string}
- */
-function generateGuestName() {
-	const suffix = Math.floor(1000 + Math.random() * 9000);
-	return `Guest-${suffix}`;
+function getSavedIdentity() {
+	return {
+		id: localStorage.getItem("collab_userId") || "",
+		name: localStorage.getItem("collab_username") || "",
+		color: localStorage.getItem("collab_color") || "",
+		sound: localStorage.getItem("collab_sound") !== "off"
+	};
 }
 
 export default function App() {
-	const documentId = useMemo(resolveDocumentIdFromLocation, []);
-	const currentUser = useMemo(() => {
-		const name = generateGuestName();
-		return {
-			name,
-			color: getColorBySeed(name)
-		};
-	}, []);
+	const initialDocumentId = useMemo(resolveDocumentIdFromLocation, []);
+	const [documentId, setDocumentId] = useState(initialDocumentId);
+	const [identity, setIdentity] = useState(getSavedIdentity);
+	const [showJoinModal, setShowJoinModal] = useState(() => !Boolean(getSavedIdentity().name));
 	
 	useEffect(() => {
 		const cleanup = startKeepAlive(import.meta.env.VITE_BACKEND_URL);
 		return cleanup;
 	}, []);
 
+	useEffect(() => {
+		if (identity.name) {
+			toast.info(`Welcome back, ${identity.name}!`, { duration: 2000 });
+		}
+		// run on first mount only
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	const handleJoin = ({ username, room, color }) => {
+		const userId = localStorage.getItem("collab_userId") || nanoid(12);
+		localStorage.setItem("collab_userId", userId);
+		localStorage.setItem("collab_username", username);
+		localStorage.setItem("collab_color", color);
+
+		if (room) {
+			const params = new URLSearchParams(window.location.search);
+			params.set("room", room);
+			window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+			setDocumentId(room);
+		}
+
+		setIdentity((prev) => ({
+			id: userId,
+			name: username,
+			color,
+			sound: prev.sound
+		}));
+		setShowJoinModal(false);
+	};
+
 	return (
 		<>
-			<AppLayout>
-				<EditorPage documentId={documentId} currentUser={currentUser} />
-			</AppLayout>
+			{showJoinModal ? (
+				<JoinModal
+					initialName={identity.name}
+					initialRoom={documentId}
+					initialColor={identity.color}
+					onSubmit={handleJoin}
+				/>
+			) : null}
+			{!showJoinModal ? (
+				<AppLayout>
+					<EditorPage
+						documentId={documentId}
+						currentUser={{
+							id: identity.id,
+							name: identity.name,
+							color: identity.color,
+							soundEnabled: identity.sound
+						}}
+						onRequestIdentityEdit={() => setShowJoinModal(true)}
+						onToggleSound={() => {
+							setIdentity((prev) => {
+								const next = { ...prev, sound: !prev.sound };
+								localStorage.setItem("collab_sound", next.sound ? "on" : "off");
+								return next;
+							});
+						}}
+					/>
+				</AppLayout>
+			) : null}
 			<ToastViewport />
 		</>
 	);

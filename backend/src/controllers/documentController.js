@@ -34,8 +34,10 @@ export async function getDocumentRoom(req, res) {
 		const document = await getDocumentById(documentId);
 		if (!document) {
 			res.status(200).json({
+				success: true,
 				documentId,
 				title: "Untitled Document",
+				content: "",
 				revisionCount: 0,
 				message: "Document metadata initialized on first save."
 			});
@@ -43,15 +45,18 @@ export async function getDocumentRoom(req, res) {
 		}
 
 		res.status(200).json({
+			success: true,
 			documentId: document.documentId,
 			title: document.title,
+			content: document.content || "",
 			createdBy: document.createdBy,
 			updatedBy: document.updatedBy,
 			revisionCount: document.revisions?.length || 0,
-			updatedAt: document.updatedAt
+			updatedAt: document.updatedAt,
+			lastModified: document.lastModified || document.updatedAt
 		});
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+		res.status(500).json({ success: false, message: error.message });
 	}
 }
 
@@ -67,18 +72,22 @@ export async function upsertDocumentMetadata(req, res) {
 	try {
 		const updated = await upsertDocument(documentId, {
 			title: req.body?.title,
+			content: req.body?.content,
 			updatedBy: req.body?.updatedBy,
 			createdBy: req.body?.createdBy
 		});
 
 		res.status(200).json({
+			success: true,
 			documentId: updated.documentId,
 			title: updated.title,
+			content: updated.content || "",
 			updatedBy: updated.updatedBy,
-			updatedAt: updated.updatedAt
+			updatedAt: updated.updatedAt,
+			lastModified: updated.lastModified || updated.updatedAt
 		});
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+		res.status(500).json({ success: false, message: error.message });
 	}
 }
 
@@ -121,9 +130,9 @@ export async function getDocumentRevisions(req, res) {
 
 	try {
 		const revisions = await listRevisions(documentId, Number.parseInt(req.query?.limit || "20", 10));
-		res.status(200).json({ revisions });
+		res.status(200).json({ success: true, revisions });
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+		res.status(500).json({ success: false, message: error.message });
 	}
 }
 
@@ -139,12 +148,16 @@ export async function restoreDocumentRevision(req, res) {
 	try {
 		const restored = await restoreRevision(documentId, revisionId, req.body?.restoredBy || "system");
 		if (!restored) {
-			res.status(404).json({ message: "Revision not found" });
+			res.status(404).json({ success: false, message: "Revision not found" });
 			return;
 		}
 
-		res.status(200).json({ snapshot: restored.toString("base64") });
+		res.status(200).json({
+			success: true,
+			snapshot: restored.snapshot.toString("base64"),
+			content: restored.content || ""
+		});
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+		res.status(500).json({ success: false, message: error.message });
 	}
 }
