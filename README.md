@@ -3,6 +3,27 @@
 CollabEditor is a Google Docs-like collaborative editor built for hackathon delivery.
 It supports multi-user editing, presence, revision history, chat, and import/export workflows.
 
+## Problem Description
+
+Teams and students often need to write documents together in real time but lack a lightweight, easy-to-deploy alternative to large commercial editors. Traditional workflows (sending files back and forth, copy-paste merging, and delayed updates) cause:
+
+- Version confusion and accidental overwrites.
+- No clear visibility into who is currently editing.
+- Poor collaboration speed during hackathons, project reviews, and classroom teamwork.
+- Missing or fragile revision tracking.
+
+CollabEditor solves this by providing a Google Docs-like experience with live co-editing, presence, cursor tracking, history, and recovery in a single web app.
+
+## Live Deployment and Repository Details
+
+- Backend URL: https://collabeditorhackathon-production.up.railway.app
+- Frontend URL: https://collab-editor-frontend-roan.vercel.app/
+- GitHub Repository: https://github.com/Muthupandi11/collab_editor_hackathon
+- MongoDB Connection (provided for hackathon setup): mongodb+srv://collab_admin:admin123@collab-cluster.aikvnvv.mongodb.net/?appName=collab-cluster
+
+Security note:
+- This MongoDB credential is included as requested for submission context. Rotate this credential immediately after judging/demo.
+
 ## 1. Project Overview
 
 ### Core capabilities
