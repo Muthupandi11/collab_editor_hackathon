@@ -62,6 +62,7 @@ export function useCollaboration({ documentId, currentUser }) {
 	const [onlineUsers, setOnlineUsers] = useState([]);
 	const [chatMessages, setChatMessages] = useState([]);
 	const [remoteCursors, setRemoteCursors] = useState([]);
+	const [documentRestoreTick, setDocumentRestoreTick] = useState(0);
 
 	const startRetryCountdown = (seconds) => {
 		if (retryCountdownRef.current) {
@@ -142,8 +143,12 @@ export function useCollaboration({ documentId, currentUser }) {
 		};
 
 		const handleRemoteYjsUpdate = (update) => {
-			const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
-			Y.applyUpdate(ydoc, payload, "remote");
+			try {
+				const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
+				Y.applyUpdate(ydoc, payload, "remote");
+			} catch {
+				setConnectionMessage("Sync error. Reconnecting...");
+			}
 		};
 
 		const pushAwarenessList = () => {
@@ -170,9 +175,13 @@ export function useCollaboration({ documentId, currentUser }) {
 		};
 
 		const handleRemoteAwarenessUpdate = (update) => {
-			const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
-			applyAwarenessUpdate(awareness, payload, "remote");
-			pushAwarenessList();
+			try {
+				const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
+				applyAwarenessUpdate(awareness, payload, "remote");
+				pushAwarenessList();
+			} catch {
+				setConnectionMessage("Presence sync error");
+			}
 		};
 
 		const handlePresenceState = (presenceEntries) => {
@@ -232,7 +241,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		};
 
 		const handleDocumentRestored = () => {
-			window.location.reload();
+			setDocumentRestoreTick((prev) => prev + 1);
 		};
 
 		const handleTypingStart = ({ userId, username }) => {
@@ -650,6 +659,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		onlineUsers,
 		chatMessages,
 		remoteCursors,
+		documentRestoreTick,
 		notifyTyping,
 		updateDocumentTitle,
 		retryConnection,

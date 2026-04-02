@@ -36,6 +36,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		onlineUsers,
 		notifyTyping,
 		typingUsers,
+		documentRestoreTick,
 		saveStatus,
 		connectionStatus,
 		connectionMessage,
@@ -202,6 +203,16 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	}, [ready, documentId, loadDocument]);
 
 	useEffect(() => {
+		if (!ready || documentRestoreTick === 0) {
+			return;
+		}
+
+		loadDocument();
+		loadRevisions();
+		toast.info("Document updated from a restored version");
+	}, [documentRestoreTick, loadDocument, loadRevisions, ready]);
+
+	useEffect(() => {
 		const interval = setInterval(async () => {
 			if (hasUnsavedChanges.current) {
 				await saveDocument();
@@ -298,6 +309,8 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		}
 		return `${typingUsers[0].username} and ${typingUsers.length - 1} others are typing...`;
 	}, [typingUsers]);
+
+	const typingUsernames = useMemo(() => typingUsers.map((entry) => entry.username), [typingUsers]);
 
 	const saveLabel =
 		saveStatus === "saving"
@@ -551,7 +564,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 				<aside className="right-sidebar">
 					<section className="side-card">
 						<button type="button" className="accordion-header" onClick={() => toggleSection("users")}>Online Now <span>{sections.users ? "▴" : "▾"}</span></button>
-						{sections.users ? <PresenceList users={onlineUsers} /> : null}
+						{sections.users ? <PresenceList users={onlineUsers} typingUsernames={typingUsernames} /> : null}
 					</section>
 					<section className="side-card">
 						<button type="button" className="accordion-header" onClick={() => toggleSection("history")}>History <span>{sections.history ? "▴" : "▾"}</span></button>
