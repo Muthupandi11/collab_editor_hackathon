@@ -1,10 +1,7 @@
 /** @type {string} Base backend URL from environment */
-const BACKEND_URL =
-	import.meta.env.VITE_BACKEND_URL ||
-	import.meta.env.VITE_API_URL ||
-	"http://localhost:4000";
+import { getBackendBaseUrl } from "./backendUrl.js";
 
-const BASE_URL = BACKEND_URL.replace(/\/$/, "");
+const BASE_URL = getBackendBaseUrl();
 
 function timeoutSignal(ms = 10000) {
 	if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {

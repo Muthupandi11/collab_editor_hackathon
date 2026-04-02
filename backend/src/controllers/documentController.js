@@ -2,6 +2,7 @@ import {
 	getDocumentById,
 	getRevisions,
 	restoreContentRevision,
+	saveRevision,
 	upsertDocument
 } from "../services/revisionService.js";
 import Revision from "../models/Revision.js";
@@ -102,21 +103,17 @@ export async function createRevisionSnapshot(req, res) {
 	const { documentId } = req.params;
 
 	try {
-		const snapshot = req.body?.snapshot;
-		if (!snapshot) {
-			res.status(400).json({ message: "snapshot is required" });
+		const content = req.body?.content;
+		if (!content || typeof content !== "string") {
+			res.status(400).json({ success: false, message: "content is required" });
 			return;
 		}
 
-		await appendRevision(documentId, {
-			snapshot: Buffer.from(snapshot, "base64"),
-			createdBy: req.body?.createdBy,
-			summary: req.body?.summary
-		});
+		const revision = await saveRevision(documentId, content, req.body?.author || req.body?.createdBy || "system");
 
-		res.status(201).json({ message: "Revision snapshot created" });
+		res.status(201).json({ success: true, revision });
 	} catch (error) {
-		res.status(500).json({ message: error.message });
+		res.status(500).json({ success: false, message: error.message });
 	}
 }
 

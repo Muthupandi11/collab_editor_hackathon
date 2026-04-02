@@ -1,14 +1,12 @@
 import { io } from "socket.io-client";
+import { getBackendBaseUrl } from "./backendUrl.js";
 
 /**
  * Creates a Socket.IO client instance.
  * @returns {import("socket.io-client").Socket}
  */
 export function createSocketClient() {
-	const backendUrl =
-		import.meta.env.VITE_BACKEND_URL ||
-		import.meta.env.VITE_SOCKET_URL ||
-		"http://localhost:4000";
+	const backendUrl = getBackendBaseUrl();
 
 	return io(backendUrl, {
 		timeout: 60000,

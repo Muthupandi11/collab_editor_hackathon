@@ -1,7 +1,7 @@
+import { getBackendBaseUrl } from "./backendUrl.js";
+
 const API_URL =
-  import.meta.env.VITE_BACKEND_URL ||
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:4000";
+  getBackendBaseUrl();
 
 /**
  * Fetches revision history for a document.

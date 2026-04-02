@@ -1,3 +1,5 @@
+import { getBackendBaseUrl, normalizeBackendUrl } from "../services/backendUrl.js";
+
 /** @type {number | null} Interval ID for the keep-alive timer */
 let keepAliveInterval = null;
 
@@ -9,7 +11,7 @@ let keepAliveInterval = null;
  * @returns {Function} Cleanup function to stop the keep-alive
  */
 export const startKeepAlive = (backendUrl) => {
-	const url = backendUrl || import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+	const url = backendUrl ? normalizeBackendUrl(backendUrl) : getBackendBaseUrl();
 
 	// Ping immediately on startup
 	pingBackend(url);

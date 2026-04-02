@@ -10,8 +10,9 @@ import ChatPanel from "../components/sidebar/ChatPanel.jsx";
 import EditorHeader from "../components/layout/EditorHeader.jsx";
 import StatusBar from "../components/layout/StatusBar.jsx";
 import ImportModal from "../components/editor/ImportModal.jsx";
+import { getBackendBaseUrl } from "../services/backendUrl.js";
 
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
+const BACKEND_URL = getBackendBaseUrl();
 
 /**
  * Document editor page.
