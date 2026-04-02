@@ -4,9 +4,40 @@ import { List, ListOrdered, Quote, Code2, Heading1, Heading2, Heading3, Minus, B
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
+import Strike from "@tiptap/extension-strike";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import TextAlign from "@tiptap/extension-text-align";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Extension } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import Toolbar from "./Toolbar.jsx";
+
+const RichTextStyle = Extension.create({
+	name: "richTextStyle",
+	addGlobalAttributes() {
+		return [
+			{
+				types: ["textStyle"],
+				attributes: {
+					fontSize: {
+						default: null,
+						parseHTML: (element) => element.style.fontSize || null,
+						renderHTML: (attributes) => (attributes.fontSize ? { style: `font-size: ${attributes.fontSize}` } : {})
+					},
+					fontFamily: {
+						default: null,
+						parseHTML: (element) => element.style.fontFamily || null,
+						renderHTML: (attributes) => (attributes.fontFamily ? { style: `font-family: ${attributes.fontFamily}` } : {})
+					}
+				}
+			}
+		];
+	}
+});
 
 const slashCommands = [
 	{ key: "h1", label: "Heading 1", hint: "/h1", icon: Heading1, run: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run() },
@@ -96,7 +127,15 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 			onSelectionChange?.(current.state.selection.from);
 		},
 		extensions: [
-			StarterKit.configure({ history: false }),
+			StarterKit.configure({ history: false, strike: false }),
+			TextStyle,
+			RichTextStyle,
+			Color,
+			Highlight.configure({ multicolor: true }),
+			TextAlign.configure({ types: ["heading", "paragraph"] }),
+			Strike,
+			Subscript,
+			Superscript,
 			Underline,
 			Collaboration.configure({
 				document: ydoc,

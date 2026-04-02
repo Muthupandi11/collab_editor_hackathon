@@ -50,7 +50,7 @@ router.post("/restore/:revisionId", async (req, res) => {
 			return res.status(400).json({ error: "docId is required" });
 		}
 
-		const restored = await revisionService.restoreRevision(docId, revisionId, restoredBy || "system");
+		const restored = await revisionService.restoreContentRevision(docId, revisionId, restoredBy || "system");
 		if (!restored) {
 			return res.status(404).json({ error: "Revision not found" });
 		}
@@ -59,8 +59,7 @@ router.post("/restore/:revisionId", async (req, res) => {
 			success: true,
 			revisionId,
 			docId,
-			content: restored.content || "",
-			snapshot: restored.snapshot.toString("base64")
+			content: restored.content || ""
 		});
 	} catch (error) {
 		res.status(500).json({ success: false, error: error.message });

@@ -370,7 +370,18 @@ export function useCollaboration({ documentId, currentUser }) {
 		ydoc.on("update", handleLocalYjsUpdate);
 		awareness.on("update", handleLocalAwarenessUpdate);
 
+		const handleBeforeUnload = () => {
+			if (socket.connected) {
+				socket.emit("user-leave", {
+					userId: currentUser.id,
+					roomId: documentId
+				});
+			}
+		};
+		window.addEventListener("beforeunload", handleBeforeUnload);
+
 		return () => {
+			window.removeEventListener("beforeunload", handleBeforeUnload);
 			awareness.off("update", handleLocalAwarenessUpdate);
 			ydoc.off("update", handleLocalYjsUpdate);
 			awareness.setLocalState(null);
@@ -461,6 +472,29 @@ export function useCollaboration({ documentId, currentUser }) {
 		setConnectionStatus("connecting");
 		setConnectionMessage("Retrying...");
 		socketRef.current.connect();
+	}
+
+	/**
+	 * Broadcasts updated user identity to current room.
+	 * @param {{ id: string, name: string, color: string }} user - Updated user identity.
+	 * @returns {void}
+	 */
+	function renameUser(user) {
+		if (!socketRef.current?.connected || !user?.name) {
+			return;
+		}
+
+		awareness.setLocalStateField("user", {
+			name: user.name,
+			color: user.color
+		});
+
+		socketRef.current.emit("user-rename", {
+			roomId: documentId,
+			userId: user.id,
+			username: user.name,
+			color: user.color
+		});
 	}
 
 	/**
@@ -603,6 +637,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		notifyTyping,
 		updateDocumentTitle,
 		retryConnection,
+		renameUser,
 		sendChatMessage,
 		reactToMessage,
 		reportCursorMove,

@@ -79,4 +79,46 @@ app.get("/health", async (_req, res) => {
 app.use("/api/documents", documentRoutes);
 app.use("/api/revisions", revisionsRoutes);
 
+app.post("/api/import/gdocs", async (req, res, next) => {
+	try {
+		const { docId } = req.body || {};
+		if (!docId) {
+			return res.status(400).json({ success: false, error: "docId is required" });
+		}
+
+		const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=html`;
+		const response = await fetch(exportUrl);
+		if (!response.ok) {
+			throw new Error("Could not fetch Google Doc. Check sharing settings.");
+		}
+
+		const html = await response.text();
+		const cleaned = html
+			.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+			.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+			.replace(/\sclass="[^"]*"/gi, "")
+			.replace(/\sid="[^"]*"/gi, "");
+
+		return res.json({ success: true, html: cleaned });
+	} catch (error) {
+		next(error);
+	}
+});
+
+app.use((req, res) => {
+	res.status(404).json({
+		success: false,
+		error: `Route not found: ${req.method} ${req.path}`
+	});
+});
+
+app.use((err, req, res, _next) => {
+	console.error("Global error:", err);
+	res.status(err.status || 500).json({
+		success: false,
+		error: err.message || "Internal server error",
+		path: req.path
+	});
+});
+
 export default app;

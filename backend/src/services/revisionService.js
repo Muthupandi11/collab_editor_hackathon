@@ -1,6 +1,16 @@
 import Document from "../models/Document.js";
+import Revision from "../models/Revision.js";
 
 const MAX_REVISION_COUNT = 100;
+const MAX_CONTENT_REVISIONS = 50;
+
+function createPreview(content) {
+	return String(content || "")
+		.replace(/<[^>]*>/g, "")
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, 80);
+}
 
 /**
  * Gets an existing document by its room identifier.
@@ -179,7 +189,22 @@ export async function restoreRevision(documentId, revisionId, restoredBy = "syst
  * @returns {Promise<Array>} Array of revision metadata sorted by newest first.
  */
 export async function getRevisions(documentId, limit = 20) {
-	return listRevisions(documentId, limit);
+	const cap = Math.max(1, Math.min(limit, MAX_CONTENT_REVISIONS));
+	const rows = await Revision.find({ docId: documentId })
+		.sort({ timestamp: -1 })
+		.limit(cap)
+		.lean();
+
+	return rows.map((revision, index) => ({
+		_id: revision._id,
+		createdAt: revision.timestamp,
+		timestamp: revision.timestamp,
+		createdBy: revision.createdBy || "Unknown",
+		summary: revision.preview || "Revision snapshot",
+		preview: revision.preview || "",
+		content: revision.content || "",
+		version: rows.length - index
+	}));
 }
 
 /**
@@ -191,35 +216,70 @@ export async function getRevisions(documentId, limit = 20) {
  */
 export async function saveRevision(documentId, content, author = "Unknown") {
 	try {
-		// Create a buffer from the content string (simplified serialization)
-		// In production, you'd want to encode this as Yjs binary
-		const snapshot = Buffer.from(JSON.stringify({ content }), "utf8");
-		const preview = String(content)
-			.replace(/<[^>]*>/g, " ")
-			.replace(/\s+/g, " ")
-			.trim()
-			.slice(0, 100) || "Snapshot";
-		
-		const result = await appendRevision(documentId, {
-			snapshot,
+		const preview = createPreview(content) || "Revision snapshot";
+
+		const revision = await Revision.create({
+			docId: documentId,
+			roomId: documentId,
 			content,
+			preview,
 			createdBy: author,
-			summary: preview
+			timestamp: new Date()
 		});
 
-		// Return the latest revision metadata
-		if (result && result.revisions && result.revisions.length > 0) {
-			const latest = result.revisions[result.revisions.length - 1];
-			return {
-				_id: latest._id,
-				createdAt: latest.createdAt,
-				createdBy: latest.createdBy,
-				summary: latest.summary
-			};
+		await upsertDocument(documentId, {
+			content,
+			updatedBy: author,
+			createdBy: author
+		});
+
+		const count = await Revision.countDocuments({ docId: documentId });
+		if (count > MAX_CONTENT_REVISIONS) {
+			const stale = await Revision.find({ docId: documentId })
+				.sort({ timestamp: 1 })
+				.limit(count - MAX_CONTENT_REVISIONS)
+				.select("_id")
+				.lean();
+			if (stale.length > 0) {
+				await Revision.deleteMany({ _id: { $in: stale.map((entry) => entry._id) } });
+			}
 		}
-		
-		return null;
+
+		return {
+			_id: revision._id,
+			createdAt: revision.timestamp,
+			createdBy: revision.createdBy,
+			summary: revision.preview,
+			preview: revision.preview,
+			content: revision.content
+		};
 	} catch (error) {
 		throw new Error(`Failed to save revision: ${error.message}`);
 	}
+}
+
+/**
+ * Restores plain content from revision collection.
+ * @param {string} documentId - Unique document room identifier.
+ * @param {string} revisionId - Revision identifier.
+ * @param {string} restoredBy - User restoring the revision.
+ * @returns {Promise<{ content: string, revision: any } | null>}
+ */
+export async function restoreContentRevision(documentId, revisionId, restoredBy = "system") {
+	const revision = await Revision.findOne({ _id: revisionId, docId: documentId }).lean();
+	if (!revision) {
+		return null;
+	}
+
+	await upsertDocument(documentId, {
+		content: revision.content,
+		updatedBy: restoredBy,
+		createdBy: restoredBy
+	});
+
+	await saveRevision(documentId, revision.content, restoredBy);
+	return {
+		content: revision.content,
+		revision
+	};
 }

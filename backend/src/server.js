@@ -77,3 +77,11 @@ process.on("SIGTERM", () => {
 process.on("SIGINT", () => {
 	process.exit(0);
 });
+
+process.on("uncaughtException", (error) => {
+	console.error("Uncaught Exception:", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+	console.error("Unhandled Rejection:", reason);
+});

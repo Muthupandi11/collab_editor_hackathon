@@ -1,4 +1,4 @@
-import { Bell, BellOff, Download, Moon, Pencil, Share2, Sun } from "lucide-react";
+import { Bell, BellOff, Download, Moon, Pencil, Share2, Sun, Upload } from "lucide-react";
 import { useState } from "react";
 
 /**
@@ -24,6 +24,7 @@ export default function EditorHeader({
 	darkMode,
 	onToggleTheme,
 	onShare,
+	onImport,
 	onExport,
 	connectionBadge,
 	currentUser,
@@ -92,6 +93,7 @@ export default function EditorHeader({
 				<div className="brand-divider" />
 				<div className="room-chip">Room: {roomId}</div>
 				<button type="button" className="header-btn" onClick={onShare}><Share2 size={15} /> Share</button>
+				<button type="button" className="header-btn" onClick={onImport}><Upload size={15} /> Import</button>
 				<button type="button" className="header-btn" onClick={onExport}><Download size={15} /> Export</button>
 				<button type="button" className="icon-btn" onClick={onToggleSound} aria-label="Toggle sound">
 					{soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}

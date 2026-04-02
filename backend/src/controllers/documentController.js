@@ -1,10 +1,10 @@
 import {
-	appendRevision,
 	getDocumentById,
-	listRevisions,
-	restoreRevision,
+	getRevisions,
+	restoreContentRevision,
 	upsertDocument
 } from "../services/revisionService.js";
+import Revision from "../models/Revision.js";
 
 /**
  * Returns a basic API health payload.
@@ -44,6 +44,7 @@ export async function getDocumentRoom(req, res) {
 			return;
 		}
 
+		const revisionCount = await Revision.countDocuments({ docId: documentId });
 		res.status(200).json({
 			success: true,
 			documentId: document.documentId,
@@ -51,7 +52,7 @@ export async function getDocumentRoom(req, res) {
 			content: document.content || "",
 			createdBy: document.createdBy,
 			updatedBy: document.updatedBy,
-			revisionCount: document.revisions?.length || 0,
+			revisionCount,
 			updatedAt: document.updatedAt,
 			lastModified: document.lastModified || document.updatedAt
 		});
@@ -129,7 +130,7 @@ export async function getDocumentRevisions(req, res) {
 	const { documentId } = req.params;
 
 	try {
-		const revisions = await listRevisions(documentId, Number.parseInt(req.query?.limit || "20", 10));
+		const revisions = await getRevisions(documentId, Number.parseInt(req.query?.limit || "20", 10));
 		res.status(200).json({ success: true, revisions });
 	} catch (error) {
 		res.status(500).json({ success: false, message: error.message });
@@ -146,7 +147,7 @@ export async function restoreDocumentRevision(req, res) {
 	const { documentId, revisionId } = req.params;
 
 	try {
-		const restored = await restoreRevision(documentId, revisionId, req.body?.restoredBy || "system");
+		const restored = await restoreContentRevision(documentId, revisionId, req.body?.restoredBy || "system");
 		if (!restored) {
 			res.status(404).json({ success: false, message: "Revision not found" });
 			return;
@@ -154,7 +155,6 @@ export async function restoreDocumentRevision(req, res) {
 
 		res.status(200).json({
 			success: true,
-			snapshot: restored.snapshot.toString("base64"),
 			content: restored.content || ""
 		});
 	} catch (error) {

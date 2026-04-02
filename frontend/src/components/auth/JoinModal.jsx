@@ -30,8 +30,8 @@ export default function JoinModal({ initialName = "", initialRoom = "", initialC
 				<div className="join-modal-icon">
 					<PencilLine size={22} />
 				</div>
-				<h1>Join CollabEditor</h1>
-				<p>Enter your name to start collaborating</p>
+				<h1>Welcome to CollabEditor</h1>
+				<p>Enter your name so others know who you are</p>
 
 				<label htmlFor="join-name">Your name</label>
 				<input
@@ -40,7 +40,7 @@ export default function JoinModal({ initialName = "", initialRoom = "", initialC
 					value={username}
 					maxLength={30}
 					autoFocus
-					placeholder="e.g. Alex, Sarah, John..."
+					placeholder="Your name (e.g. Alex)"
 					onKeyDown={(event) => event.stopPropagation()}
 					onChange={(event) => setUsername(event.target.value)}
 				/>
@@ -92,9 +92,9 @@ export default function JoinModal({ initialName = "", initialRoom = "", initialC
 						});
 					}}
 				>
-					Start Collaborating {">"}
+					Join Room {">"}
 				</button>
-				<small className="join-modal-footer">No account needed. 100% free.</small>
+				<small className="join-modal-footer">Your name is only visible in this session.</small>
 			</div>
 		</div>
 	);

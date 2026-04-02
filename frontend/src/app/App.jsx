@@ -29,9 +29,9 @@ function resolveDocumentIdFromLocation() {
 
 function getSavedIdentity() {
 	return {
-		id: localStorage.getItem("collab_userId") || "",
-		name: localStorage.getItem("collab_username") || "",
-		color: localStorage.getItem("collab_color") || "",
+		id: sessionStorage.getItem("collab_userId") || "",
+		name: sessionStorage.getItem("collab_username") || "",
+		color: sessionStorage.getItem("collab_color") || "",
 		sound: localStorage.getItem("collab_sound") !== "off"
 	};
 }
@@ -56,10 +56,10 @@ export default function App() {
 	}, []);
 
 	const handleJoin = ({ username, room, color }) => {
-		const userId = localStorage.getItem("collab_userId") || nanoid(12);
-		localStorage.setItem("collab_userId", userId);
-		localStorage.setItem("collab_username", username);
-		localStorage.setItem("collab_color", color);
+		const userId = sessionStorage.getItem("collab_userId") || nanoid(12);
+		sessionStorage.setItem("collab_userId", userId);
+		sessionStorage.setItem("collab_username", username);
+		sessionStorage.setItem("collab_color", color);
 
 		if (room) {
 			const params = new URLSearchParams(window.location.search);
@@ -76,6 +76,16 @@ export default function App() {
 		}));
 		setShowJoinModal(false);
 	};
+
+	useEffect(() => {
+		const handleBeforeUnload = () => {
+			sessionStorage.removeItem("collab_username");
+			sessionStorage.removeItem("collab_color");
+		};
+
+		window.addEventListener("beforeunload", handleBeforeUnload);
+		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+	}, []);
 
 	return (
 		<>

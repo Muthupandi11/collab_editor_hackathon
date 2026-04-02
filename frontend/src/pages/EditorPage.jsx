@@ -9,6 +9,7 @@ import LeftSidebar from "../components/sidebar/LeftSidebar.jsx";
 import ChatPanel from "../components/sidebar/ChatPanel.jsx";
 import EditorHeader from "../components/layout/EditorHeader.jsx";
 import StatusBar from "../components/layout/StatusBar.jsx";
+import ImportModal from "../components/editor/ImportModal.jsx";
 
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
 
@@ -45,6 +46,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	const hasUnsavedChanges = useRef(false);
 	const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
 	const [showExportMenu, setShowExportMenu] = useState(false);
+	const [showImportModal, setShowImportModal] = useState(false);
 	const [sections, setSections] = useState({ users: true, history: true, chat: false });
 	const [title, setTitle] = useState(documentTitle);
 	const [editorText, setEditorText] = useState("");
@@ -54,6 +56,16 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	const [revisionError, setRevisionError] = useState("");
 	const [restoringId, setRestoringId] = useState(null);
 	const [loadingDocument, setLoadingDocument] = useState(false);
+	const [lastSavedAt, setLastSavedAt] = useState(null);
+
+	const parseJsonSafely = async (response, url) => {
+		const contentType = response.headers.get("content-type") || "";
+		if (!contentType.includes("application/json")) {
+			const text = await response.text();
+			throw new Error(`Server returned HTML. Status: ${response.status}. URL: ${url}. Snippet: ${text.slice(0, 40)}`);
+		}
+		return response.json();
+	};
 
 	const loadRevisions = useCallback(async () => {
 		setLoadingRevisions(true);
@@ -79,7 +91,8 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		}
 
 		try {
-			const response = await fetch(`${BACKEND_URL}/api/documents/${documentId}`, {
+			const saveUrl = `${BACKEND_URL}/api/documents/${documentId}`;
+			const response = await fetch(saveUrl, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				credentials: "include",
@@ -95,15 +108,18 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			if (!response.ok) {
 				throw new Error(`Document save failed: HTTP ${response.status}`);
 			}
+			await parseJsonSafely(response, saveUrl);
 
 			await saveRevision(documentId, content, currentUser.name);
 			hasUnsavedChanges.current = false;
+			setLastSavedAt(new Date().toISOString());
+			await loadRevisions();
 			return true;
 		} catch (error) {
 			toast.error(`Save failed: ${error.message}`);
 			return false;
 		}
-	}, [currentUser.name, documentId, title]);
+	}, [currentUser.name, documentId, loadRevisions, title]);
 
 	const loadDocument = useCallback(async () => {
 		if (!documentId || !editorRef.current) {
@@ -112,7 +128,8 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 
 		setLoadingDocument(true);
 		try {
-			const response = await fetch(`${BACKEND_URL}/api/documents/${documentId}`, {
+			const url = `${BACKEND_URL}/api/documents/${documentId}`;
+			const response = await fetch(url, {
 				credentials: "include",
 				headers: { Accept: "application/json" }
 			});
@@ -121,7 +138,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 				throw new Error(`Load failed: HTTP ${response.status}`);
 			}
 
-			const payload = await response.json();
+			const payload = await parseJsonSafely(response, url);
 			const content = payload?.content || payload?.document?.content || "";
 			const savedTitle = payload?.title || payload?.document?.title || "Untitled Document";
 
@@ -157,6 +174,16 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	useEffect(() => {
 		loadRevisions();
 	}, [loadRevisions]);
+
+	useEffect(() => {
+		if (!sections.history) {
+			return;
+		}
+		const timer = setInterval(() => {
+			loadRevisions();
+		}, 60000);
+		return () => clearInterval(timer);
+	}, [loadRevisions, sections.history]);
 
 	useEffect(() => {
 		if (ready && editorRef.current) {
@@ -225,7 +252,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 					await forceSave();
 					await saveDocument();
 				}
-				toast.success("Document restored!");
+				toast.success("Restored to selected version");
 				await loadRevisions();
 			} catch (error) {
 				setRevisionError(error.message || "Restore failed.");
@@ -235,6 +262,21 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			}
 		},
 		[documentId, forceSave, loadRevisions, saveDocument]
+	);
+
+	const handleImportContent = useCallback(
+		async ({ html, source }) => {
+			if (!editorRef.current) {
+				throw new Error("Editor not ready");
+			}
+			await saveDocument();
+			editorRef.current.commands.setContent(html || "<p></p>", false);
+			hasUnsavedChanges.current = true;
+			await forceSave();
+			await saveDocument();
+			toast.success(`${source} imported and synced to all users`);
+		},
+		[forceSave, saveDocument]
 	);
 
 	const typingLabel = useMemo(() => {
@@ -395,6 +437,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 					localStorage.setItem("theme", next ? "dark" : "light");
 				}}
 				onShare={handleShare}
+				onImport={() => setShowImportModal(true)}
 				onExport={() => setShowExportMenu((prev) => !prev)}
 				connectionBadge={connectionBadge}
 				currentUser={currentUser}
@@ -413,13 +456,19 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 					<button type="button" onClick={() => exportDocument("gdocs")}>Open in Google Docs</button>
 				</div>
 			) : null}
+			<ImportModal
+				open={showImportModal}
+				backendUrl={BACKEND_URL}
+				onClose={() => setShowImportModal(false)}
+				onImport={handleImportContent}
+			/>
 
 			<div className="premium-layout">
 				<LeftSidebar
 					stats={{
 						revisions: revisions.length,
 						users: onlineUsers.length,
-						updatedText: revisions[0]?.createdAt ? new Date(revisions[0].createdAt).toLocaleString() : "Just now"
+						updatedText: lastSavedAt ? new Date(lastSavedAt).toLocaleString() : "Not saved yet"
 					}}
 					onNewRoom={() => {
 						const url = new URL(window.location.href);

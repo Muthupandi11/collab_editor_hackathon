@@ -306,6 +306,32 @@ export function registerCollaborationSocket(io) {
 			}
 		});
 
+		socket.on("user-leave", ({ userId, roomId }) => {
+			if (!roomId) {
+				return;
+			}
+			socket.to(roomId).emit("user-left", {
+				userId: userId || socket.data?.user?.id || socket.id
+			});
+		});
+
+		socket.on("user-rename", ({ roomId, userId, username, color }) => {
+			if (!roomId || !username) {
+				return;
+			}
+			socket.data.user = {
+				...(socket.data.user || {}),
+				id: userId || socket.data?.user?.id || socket.id,
+				name: username,
+				color: color || socket.data?.user?.color || "#2563EB"
+			};
+			socket.to(roomId).emit("user-renamed", {
+				userId: socket.data.user.id,
+				username: socket.data.user.name,
+				color: socket.data.user.color
+			});
+		});
+
 		socket.on("restore-document", async ({ documentId, revisionId, restoredBy }, ack) => {
 				if (!documentId || !revisionId) {
 					if (typeof ack === "function") {
