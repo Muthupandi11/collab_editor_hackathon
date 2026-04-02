@@ -4,6 +4,8 @@ const BACKEND_URL =
 	import.meta.env.VITE_API_URL ||
 	"http://localhost:4000";
 
+const BASE_URL = BACKEND_URL.replace(/\/$/, "");
+
 function timeoutSignal(ms = 10000) {
 	if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
 		return AbortSignal.timeout(ms);
@@ -14,35 +16,70 @@ function timeoutSignal(ms = 10000) {
 	return controller.signal;
 }
 
+async function parseJsonResponse(response, endpoint) {
+	const text = await response.text();
+	try {
+		return text ? JSON.parse(text) : {};
+	} catch {
+		throw new Error(`Expected JSON but got non-JSON response from ${endpoint}`);
+	}
+}
+
+async function fetchFromEndpoints(endpoints, options = {}) {
+	let lastError = null;
+
+	for (const endpoint of endpoints) {
+		try {
+			const response = await fetch(endpoint, {
+				credentials: "include",
+				headers: {
+					"Content-Type": "application/json",
+					Accept: "application/json",
+					...(options.headers || {})
+				},
+				signal: timeoutSignal(10000),
+				...options
+			});
+
+			if (!response.ok) {
+				lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+				continue;
+			}
+
+			const contentType = response.headers.get("content-type") || "";
+			if (!contentType.includes("application/json")) {
+				lastError = new Error(`Expected JSON but got ${contentType || "unknown content-type"} from ${endpoint}`);
+				continue;
+			}
+
+			return parseJsonResponse(response, endpoint);
+		} catch (error) {
+			if (error?.name === "AbortError" || error?.name === "TimeoutError") {
+				lastError = new Error("Request timed out");
+				continue;
+			}
+			lastError = error;
+		}
+	}
+
+	throw lastError || new Error("Request failed");
+}
+
 /**
  * Fetch revision history for a document
  * @param {string} docId - Document ID
  * @returns {Promise<Array>} Array of revision objects with timestamp, content, author
  */
 export const fetchRevisions = async (docId) => {
-	const endpoint = `${BACKEND_URL.replace(/\/$/, "")}/api/revisions/${docId}`;
+	const endpoints = [
+		`${BASE_URL}/api/revisions/${docId}`,
+		`${BASE_URL}/api/documents/${docId}/revisions`
+	];
 
 	try {
-		const response = await fetch(endpoint, {
-			method: "GET",
-			credentials: "include",
-			headers: {
-				"Content-Type": "application/json",
-				Accept: "application/json"
-			},
-			signal: timeoutSignal(10000)
-		});
-
-		if (!response.ok) {
-			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-		}
-
-		const data = await response.json();
+		const data = await fetchFromEndpoints(endpoints, { method: "GET" });
 		return data?.revisions || [];
 	} catch (error) {
-		if (error?.name === "AbortError" || error?.name === "TimeoutError") {
-			throw new Error("Request timed out");
-		}
 		throw new Error(error?.message || "Failed to load revisions");
 	}
 };
@@ -56,21 +93,19 @@ export const fetchRevisions = async (docId) => {
  */
 export const saveRevision = async (docId, content, author) => {
 	try {
-		const response = await fetch(
-			`${BACKEND_URL.replace(/\/$/, "")}/api/revisions`,
+		return await fetchFromEndpoints(
+			[`${BASE_URL}/api/revisions`, `${BASE_URL}/api/documents/${docId}/revisions`],
 			{
 				method: "POST",
-				credentials: "include",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ docId, content, author, roomId: docId })
+				body: JSON.stringify({
+					docId,
+					content,
+					author,
+					roomId: docId,
+					summary: String(content).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 100)
+				})
 			}
 		);
-
-		if (!response.ok) {
-			throw new Error(`Failed to save revision: HTTP ${response.status}`);
-		}
-
-		return await response.json();
 	} catch (error) {
 		throw new Error(error?.message || "Failed to save revision");
 	}
@@ -83,21 +118,16 @@ export const saveRevision = async (docId, content, author) => {
  */
 export const restoreRevision = async (docId, revisionId) => {
 	try {
-		const response = await fetch(
-			`${BACKEND_URL.replace(/\/$/, "")}/api/revisions/restore/${revisionId}`,
+		return await fetchFromEndpoints(
+			[
+				`${BASE_URL}/api/revisions/restore/${revisionId}`,
+				`${BASE_URL}/api/documents/${docId}/revisions/${revisionId}/restore`
+			],
 			{
 				method: "POST",
-				credentials: "include",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ docId })
+				body: JSON.stringify({ docId, documentId: docId, restoredBy: "user" })
 			}
 		);
-
-		if (!response.ok) {
-			throw new Error(`Failed to restore revision: HTTP ${response.status}`);
-		}
-
-		return await response.json();
 	} catch (error) {
 		throw new Error(error?.message || "Failed to restore revision");
 	}
