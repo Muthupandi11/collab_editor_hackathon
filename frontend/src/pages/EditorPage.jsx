@@ -158,13 +158,12 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 				hasUnsavedChanges.current = false;
 			}
 			setTitle(savedTitle);
-			updateDocumentTitle(savedTitle);
 		} catch (error) {
 			toast.error(`Load failed: ${error.message}`);
 		} finally {
 			setLoadingDocument(false);
 		}
-	}, [documentId, updateDocumentTitle]);
+	}, [documentId]);
 
 	useEffect(() => {
 		document.documentElement.classList.toggle("dark", darkMode);
@@ -200,7 +199,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		if (ready && editorRef.current) {
 			loadDocument();
 		}
-	}, [loadDocument, ready]);
+	}, [ready, documentId, loadDocument]);
 
 	useEffect(() => {
 		const interval = setInterval(async () => {
