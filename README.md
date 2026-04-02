@@ -172,7 +172,12 @@ See full deployment guide in `docs/deployment.md`.
 
 This project has been AI-assisted during implementation and debugging.
 
+Policy compliance note:
+- All AI tools used in this project are disclosed in this section.
+- No additional undisclosed AI tooling was used for implementation, debugging, or documentation.
+
 - GitHub Copilot Chat
+- OpenAI ChatGPT (GPT-5.3)
 - GPT-5.3-Codex model (via Copilot tooling)
 
 AI assistance was used for:
