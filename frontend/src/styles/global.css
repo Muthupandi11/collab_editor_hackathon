@@ -1045,6 +1045,40 @@ body {
 	color: var(--text-secondary);
 }
 
+.remote-cursor-layer {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 40;
+}
+
+.remote-cursor-marker {
+	position: absolute;
+	transform: translate(-1px, -10px);
+	min-width: 1px;
+	max-width: 220px;
+	white-space: nowrap;
+	font-size: 11px;
+	font-weight: 700;
+}
+
+.remote-cursor-line {
+	display: block;
+	width: 2px;
+	height: 1.2em;
+	border-radius: 999px;
+	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+.remote-cursor-label {
+	display: inline-block;
+	margin-left: 4px;
+	padding: 0.2rem 0.45rem;
+	border-radius: 999px;
+	color: #fff;
+	box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
 .template-picker {
 	margin-top: 16px;
 	padding-top: 8px;

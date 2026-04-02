@@ -556,6 +556,22 @@ export function useCollaboration({ documentId, currentUser }) {
 	}
 
 	/**
+	 * Stores the current text selection in awareness so collaboration cursors render.
+	 * @param {{ from: number, to: number }} selection - Current editor selection.
+	 * @returns {void}
+	 */
+	function updateCursorSelection(selection) {
+		if (!selection || typeof selection.from !== "number" || typeof selection.to !== "number") {
+			return;
+		}
+
+		awareness.setLocalStateField("cursor", {
+			anchor: selection.from,
+			head: selection.to
+		});
+	}
+
+	/**
 	 * Force-saves current Yjs document state through socket ack.
 	 * @returns {Promise<boolean>}
 	 */
@@ -642,6 +658,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		reactToMessage,
 		reportCursorMove,
 		forceSave,
-		requestRevisionRestore
+		requestRevisionRestore,
+		updateCursorSelection
 	};
 }

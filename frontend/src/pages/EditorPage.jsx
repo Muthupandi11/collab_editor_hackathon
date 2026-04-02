@@ -20,6 +20,15 @@ const BACKEND_URL = getBackendBaseUrl();
  * @returns {JSX.Element}
  */
 export default function EditorPage({ documentId, currentUser, onRequestIdentityEdit, onToggleSound }) {
+	const collaborationUser = useMemo(
+		() => ({
+			id: currentUser.id,
+			name: currentUser.name,
+			color: currentUser.color
+		}),
+		[currentUser.id, currentUser.name, currentUser.color]
+	);
+
 	const {
 		ydoc,
 		awareness,
@@ -40,8 +49,9 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		reactToMessage,
 		remoteCursors,
 		reportCursorMove,
+		updateCursorSelection,
 		forceSave
-	} = useCollaboration({ documentId, currentUser });
+	} = useCollaboration({ documentId, currentUser: collaborationUser });
 
 	const editorRef = useRef(null);
 	const hasUnsavedChanges = useRef(false);
@@ -395,6 +405,18 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		}
 	};
 
+	const handleSelectionChange = useCallback(
+		(selection) => {
+			if (!selection) {
+				return;
+			}
+
+			reportCursorMove(selection.from);
+			updateCursorSelection(selection);
+		},
+		[reportCursorMove, updateCursorSelection]
+	);
+
 	const toggleSection = (key) => {
 		setSections((prev) => ({ ...prev, [key]: !prev[key] }));
 	};
@@ -503,7 +525,8 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 						onEditorReady={(editor) => {
 							editorRef.current = editor;
 						}}
-						onSelectionChange={reportCursorMove}
+						onSelectionChange={handleSelectionChange}
+						remoteCursors={remoteCursors}
 					/>
 
 					<div className="word-count-bar">

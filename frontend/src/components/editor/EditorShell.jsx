@@ -85,10 +85,10 @@ const templates = [
 
 /**
  * Renders the collaborative TipTap editor and formatting toolbar.
- * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean, onTyping?: () => void, onTextStatsChange?: (payload: { words: number, characters: number, lines: number }) => void, onPlainTextChange?: (text: string) => void, onEditorReady?: (editor: import("@tiptap/react").Editor | null) => void, onSelectionChange?: (position: number) => void, draftToApply?: string | null, onDraftApplied?: () => void }} props - Editor props.
+ * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean, onTyping?: () => void, onTextStatsChange?: (payload: { words: number, characters: number, lines: number }) => void, onPlainTextChange?: (text: string) => void, onEditorReady?: (editor: import("@tiptap/react").Editor | null) => void, onSelectionChange?: (selection: { from: number, to: number }) => void, remoteCursors?: Array<{ userId: string | number, username: string, color: string, position: number }>, draftToApply?: string | null, onDraftApplied?: () => void }} props - Editor props.
  * @returns {JSX.Element}
  */
-export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange, onPlainTextChange, onEditorReady, onSelectionChange, draftToApply, onDraftApplied }) {
+export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange, onPlainTextChange, onEditorReady, onSelectionChange, remoteCursors = [], draftToApply, onDraftApplied }) {
 	const editorContainerRef = useRef(null);
 	const [slashState, setSlashState] = useState({ open: false, query: "", index: 0, top: 0, left: 0 });
 	const [templateDismissed, setTemplateDismissed] = useState(false);
@@ -124,7 +124,10 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 			}
 		},
 		onSelectionUpdate: ({ editor: current }) => {
-			onSelectionChange?.(current.state.selection.from);
+			onSelectionChange?.({
+				from: current.state.selection.from,
+				to: current.state.selection.to
+			});
 		},
 		extensions: [
 			StarterKit.configure({ history: false, strike: false }),
@@ -229,8 +232,36 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 		>
 			<Toolbar editor={editor} ready={ready} />
 			<div className="editor-card bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8">
-				<div className="mx-auto max-w-[800px] border-l border-r border-gray-100 dark:border-gray-700 px-4">
+				<div className="mx-auto max-w-[800px] border-l border-r border-gray-100 dark:border-gray-700 px-4 relative">
 					<EditorContent editor={editor} />
+					{editor && remoteCursors.length > 0 ? (
+						<div className="remote-cursor-layer" aria-hidden="true">
+							{remoteCursors.slice(-6).map((cursor) => {
+								try {
+									const resolvedPosition = Math.max(1, Math.min(cursor.position || 1, editor.state.doc.content.size));
+									const coords = editor.view.coordsAtPos(resolvedPosition);
+									const editorRect = editor.view.dom.getBoundingClientRect();
+									const left = Math.max(0, coords.left - editorRect.left);
+									const top = Math.max(0, coords.top - editorRect.top);
+
+									return (
+										<div
+											key={`${cursor.userId}-${cursor.position}`}
+											className="remote-cursor-marker"
+											style={{ left: `${left}px`, top: `${top}px`, borderColor: cursor.color, color: cursor.color }}
+										>
+											<span className="remote-cursor-line" style={{ backgroundColor: cursor.color }} />
+											<span className="remote-cursor-label" style={{ backgroundColor: cursor.color }}>
+												{cursor.username}
+											</span>
+										</div>
+									);
+								} catch {
+									return null;
+								}
+							})}
+						</div>
+					) : null}
 
 					{showTemplatePicker ? (
 						<div className="template-picker">
