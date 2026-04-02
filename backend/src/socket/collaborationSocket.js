@@ -167,6 +167,8 @@ export function registerCollaborationSocket(io) {
 				return;
 			}
 
+			const resolvedName = socket.data?.user?.name || username || "Someone";
+
 			const roomUsers = roomTyping.get(roomId) || new Map();
 			const existing = roomUsers.get(userId);
 			if (existing?.timeout) {
@@ -180,9 +182,9 @@ export function registerCollaborationSocket(io) {
 				socket.to(roomId).emit("user-stopped", { roomId, userId });
 			}, 3000);
 
-			roomUsers.set(userId, { username: username || "Someone", timeout });
+			roomUsers.set(userId, { username: resolvedName, timeout });
 			roomTyping.set(roomId, roomUsers);
-			socket.to(roomId).emit("user-typing", { roomId, userId, username: username || "Someone" });
+			socket.to(roomId).emit("user-typing", { roomId, userId, username: resolvedName });
 		});
 
 		socket.on("typing-stop", ({ roomId, userId }) => {
@@ -278,10 +280,12 @@ export function registerCollaborationSocket(io) {
 				return;
 			}
 
+			const resolvedUser = socket.data?.user || {};
+
 			socket.to(roomId).emit("cursor-update", {
-				userId: userId || socket.id,
-				username: username || socket.data?.user?.name || "Guest",
-				color: color || socket.data?.user?.color || "#2563EB",
+				userId: userId || resolvedUser.id || socket.id,
+				username: resolvedUser.name || username || "Guest",
+				color: resolvedUser.color || color || "#2563EB",
 				position,
 				timestamp: Date.now()
 			});
