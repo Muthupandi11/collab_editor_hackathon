@@ -285,17 +285,60 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		}
 
 		const base = (title || "document").trim() || "document";
+		const html = editorRef.current.getHTML();
+		const plainText = editorRef.current.getText();
 		if (type === "txt") {
-			downloadBlob(new Blob([editorRef.current.getText()], { type: "text/plain" }), `${base}.txt`);
+			downloadBlob(new Blob([plainText], { type: "text/plain" }), `${base}.txt`);
+		}
+		if (type === "json") {
+			const payload = JSON.stringify(
+				{
+					title: title || "Untitled Document",
+					roomId: documentId,
+					text: plainText,
+					html,
+					exportedAt: new Date().toISOString()
+				},
+				null,
+				2
+			);
+			downloadBlob(new Blob([payload], { type: "application/json" }), `${base}.json`);
 		}
 		if (type === "html") {
-			const html = editorRef.current.getHTML();
 			const fullHtml = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>${base}</title></head><body>${html}</body></html>`;
 			downloadBlob(new Blob([fullHtml], { type: "text/html" }), `${base}.html`);
 		}
 		if (type === "md") {
-			const markdown = editorRef.current.getText().replace(/\n{2,}/g, "\n\n");
+			const markdown = plainText.replace(/\n{2,}/g, "\n\n");
 			downloadBlob(new Blob([markdown], { type: "text/markdown" }), `${base}.md`);
+		}
+		if (type === "word") {
+			const wordDoc = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${html}</body></html>`;
+			downloadBlob(new Blob([wordDoc], { type: "application/msword" }), `${base}.doc`);
+		}
+		if (type === "pdf") {
+			const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=800");
+			if (!printWindow) {
+				toast.error("Popup blocked. Allow popups to export PDF.");
+				setShowExportMenu(false);
+				return;
+			}
+			printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${base}</title><style>body{font-family:Inter,Arial,sans-serif;padding:32px;line-height:1.6;} h1,h2,h3{margin-top:1.2em;} p{margin:0.6em 0;} ul,ol{margin:0.6em 0 0.8em 1.2em;}</style></head><body>${html}</body></html>`);
+			printWindow.document.close();
+			printWindow.focus();
+			printWindow.print();
+		}
+		if (type === "gdocs") {
+			navigator.clipboard
+				.writeText(plainText)
+				.then(() => {
+					window.open("https://docs.new", "_blank", "noopener,noreferrer");
+					toast.info("Google Docs opened. Paste with Ctrl+V.");
+				})
+				.catch(() => {
+					window.open("https://docs.new", "_blank", "noopener,noreferrer");
+					toast.info("Google Docs opened. Copy content manually.");
+				});
 		}
 		setShowExportMenu(false);
 	};
@@ -362,8 +405,12 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			{showExportMenu ? (
 				<div className="export-menu">
 					<button type="button" onClick={() => exportDocument("txt")}>Export as TXT</button>
+					<button type="button" onClick={() => exportDocument("json")}>Export as JSON</button>
 					<button type="button" onClick={() => exportDocument("html")}>Export as HTML</button>
 					<button type="button" onClick={() => exportDocument("md")}>Export as Markdown</button>
+					<button type="button" onClick={() => exportDocument("word")}>Export as Word</button>
+					<button type="button" onClick={() => exportDocument("pdf")}>Export as PDF</button>
+					<button type="button" onClick={() => exportDocument("gdocs")}>Open in Google Docs</button>
 				</div>
 			) : null}
 
