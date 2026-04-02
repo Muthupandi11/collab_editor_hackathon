@@ -153,7 +153,7 @@ html.dark .title-input {
 
 .toolbar {
 	display: flex;
-	flex-wrap: wrap;
+	flex-direction: column;
 	align-items: center;
 	gap: 0.55rem;
 	margin-bottom: 0.75rem;
@@ -162,6 +162,8 @@ html.dark .title-input {
 	border-radius: 12px;
 	background: rgba(255, 255, 255, 0.75);
 	backdrop-filter: blur(3px);
+	overflow: visible;
+	position: relative;
 }
 
 html.dark .toolbar {
@@ -173,6 +175,134 @@ html.dark .toolbar {
 	display: inline-flex;
 	gap: 0.45rem;
 	flex-wrap: wrap;
+}
+
+.toolbar-menu-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	width: 100%;
+	justify-content: flex-start;
+}
+
+.toolbar-menu-summary {
+	margin-left: auto;
+	font-size: 0.78rem;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.toolbar-menu-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	height: 34px;
+	padding: 0 0.8rem;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--bg-surface);
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: transform 140ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.toolbar-menu-button:hover {
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-sm);
+	border-color: var(--primary);
+}
+
+.toolbar-menu-button.active {
+	background: var(--primary-light);
+	border-color: var(--primary);
+	color: var(--primary-dark);
+}
+
+.toolbar-menu-panel {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	padding: 0.75rem;
+	background: var(--bg-surface);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	box-shadow: var(--shadow-md);
+}
+
+.toolbar-section {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.toolbar-label {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-muted);
+}
+
+.toolbar-grid-2,
+.toolbar-grid-3,
+.toolbar-grid-4 {
+	display: grid;
+	gap: 0.5rem;
+}
+
+.toolbar-grid-2 {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.toolbar-grid-3 {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.toolbar-grid-4 {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.toolbar-grid-2 .toolbar-icon-btn,
+.toolbar-grid-3 .toolbar-icon-btn,
+.toolbar-grid-4 .toolbar-icon-btn,
+.toolbar-grid-2 .toolbar-menu-button,
+.toolbar-grid-3 .toolbar-menu-button,
+.toolbar-grid-4 .toolbar-menu-button {
+	width: 100%;
+	justify-content: center;
+	min-height: 44px;
+	height: auto;
+	padding: 0.65rem 0.5rem;
+	border-radius: 12px;
+	flex-direction: column;
+	gap: 0.2rem;
+	font-size: 12px;
+}
+
+.toolbar-grid-2 button span,
+.toolbar-grid-3 button span,
+.toolbar-grid-4 button span {
+	line-height: 1;
+}
+
+.toolbar-grid-2 button svg,
+.toolbar-grid-3 button svg,
+.toolbar-grid-4 button svg {
+	flex-shrink: 0;
+}
+
+.toolbar-section .toolbar-select {
+	width: 100%;
+	height: 40px;
+	border-radius: 10px;
+}
+
+.toolbar-section .toolbar-select.small {
+	max-width: 120px;
 }
 
 .toolbar-divider {
@@ -819,8 +949,8 @@ body {
 	position: sticky;
 	top: 60px;
 	z-index: 99;
-	height: 44px;
-	overflow-x: auto;
+	min-height: 44px;
+	overflow: visible;
 	background: var(--bg-surface);
 	border-color: var(--border);
 }
