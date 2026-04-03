@@ -1,7 +1,13 @@
 import cors from "cors";
 import express from "express";
+import mammoth from "mammoth";
+import multer from "multer";
+import fetch from "node-fetch";
+import * as pdfParsePackage from "pdf-parse";
 import documentRoutes from "./routes/documentRoutes.js";
 import revisionsRoutes from "./routes/revisions.js";
+
+const pdfParse = pdfParsePackage.default || pdfParsePackage;
 
 const app = express();
 
@@ -45,6 +51,47 @@ app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "1mb" }));
 
+const upload = multer({
+	storage: multer.memoryStorage(),
+	limits: { fileSize: 20 * 1024 * 1024 }
+});
+
+const escapeHtml = (str) =>
+	String(str || "")
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;");
+
+const sanitizeDocxHtml = (rawHtml) => {
+	let html = String(rawHtml || "");
+	html = html.replace(/<(\w+)[^>]*>/g, "<$1>");
+	html = html.replace(/<(span|div|section|article)>/gi, "");
+	html = html.replace(/<\/(span|div|section|article)>/gi, "");
+	html = html.replace(/<img[^>]*>/gi, "");
+	html = html.replace(/<table>[\s\S]*?<\/table>/gi, "<p>[Table not supported - content omitted]</p>");
+
+	// Keep only heading/paragraph tags for TipTap-safe parsing.
+	html = html.replace(/<(?!\/?(p|h1|h2|h3|h4|h5|h6)\b)[^>]+>/gi, "");
+	html = html.replace(/<p>\s*<\/p>/gi, "");
+	html = html.replace(/<h[1-6]>\s*<\/h[1-6]>/gi, "");
+
+	return html.trim() || "<p>Document appears to be empty or contains only images.</p>";
+};
+
+const textToParagraphHtml = (rawText) => {
+	const paragraphs = String(rawText || "")
+		.split(/\n{2,}/)
+		.map((line) => line.replace(/\n/g, " ").replace(/\s+/g, " ").trim())
+		.filter((line) => line.length > 0);
+
+	if (paragraphs.length === 0) {
+		return "";
+	}
+
+	return paragraphs.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
+};
+
 app.get("/", (_req, res) => {
 	res.status(200).json({
 		status: "ok",
@@ -79,81 +126,138 @@ app.get("/health", async (_req, res) => {
 app.use("/api/documents", documentRoutes);
 app.use("/api/revisions", revisionsRoutes);
 
-const extractBodyHtml = (rawHtml) => {
-	const source = String(rawHtml || "");
-	const bodyMatch = source.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-	const content = bodyMatch ? bodyMatch[1] : source;
+app.post("/api/import/docx", upload.single("file"), async (req, res) => {
+	try {
+		if (!req.file) {
+			return res.status(400).json({ success: false, error: "No file uploaded" });
+		}
 
-	const cleaned = content
-		.replace(/<!--([\s\S]*?)-->/g, "")
-		.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-		.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-		.replace(/<(iframe|object|embed|link|meta|noscript)[^>]*>[\s\S]*?<\/\1>/gi, "")
-		.replace(/<(iframe|object|embed|link|meta|noscript)[^>]*\/?\s*>/gi, "")
-		.replace(/\sclass="[^"]*"/gi, "")
-		.replace(/\sid="[^"]*"/gi, "")
-		.replace(/\sstyle="[^"]*"/gi, "")
-		.trim();
+		const result = await mammoth.convertToHtml(
+			{ buffer: req.file.buffer },
+			{
+				styleMap: [
+					"p[style-name='Heading 1'] => h1:fresh",
+					"p[style-name='Heading 2'] => h2:fresh",
+					"p[style-name='Heading 3'] => h3:fresh",
+					"p[style-name='Title'] => h1:fresh"
+				]
+			}
+		);
 
-	return cleaned || "<p></p>";
-};
+		const html = sanitizeDocxHtml(result?.value || "");
+		return res.json({ success: true, html });
+	} catch (error) {
+		console.error("DOCX import error:", error);
+		return res.status(500).json({ success: false, error: `Failed to convert Word file: ${error.message}` });
+	}
+});
 
-const textToParagraphHtml = (rawText) => {
-	const safe = String(rawText || "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
+app.post("/api/import/pdf", upload.single("file"), async (req, res) => {
+	try {
+		if (!req.file) {
+			return res.status(400).json({ success: false, error: "No file uploaded" });
+		}
 
-	const html = safe
-		.split(/\n\n+/)
-		.map((chunk) => chunk.trim())
-		.filter(Boolean)
-		.map((chunk) => `<p>${chunk.replace(/\n/g, "<br />")}</p>`)
-		.join("");
+		let data;
+		try {
+			data = await pdfParse(req.file.buffer);
+		} catch {
+			return res.status(400).json({
+				success: false,
+				error: "Cannot read PDF. File may be corrupted or password-protected."
+			});
+		}
 
-	return html || "<p></p>";
-};
+		if (!data?.text || !data.text.trim()) {
+			return res.status(400).json({
+				success: false,
+				error: "No text found in PDF. This may be a scanned or image-based PDF."
+			});
+		}
 
-app.post("/api/import/gdocs", async (req, res, next) => {
+		const html = textToParagraphHtml(data.text);
+		if (!html) {
+			return res.status(400).json({
+				success: false,
+				error: "Could not extract readable text from PDF."
+			});
+		}
+
+		const wordCount = String(data.text)
+			.trim()
+			.split(/\s+/)
+			.filter(Boolean).length;
+
+		return res.json({ success: true, html, pageCount: data.numpages || 0, wordCount });
+	} catch (error) {
+		console.error("PDF import error:", error);
+		return res.status(500).json({ success: false, error: `PDF processing failed: ${error.message}` });
+	}
+});
+
+app.post("/api/import/gdocs", async (req, res) => {
 	try {
 		const { docId } = req.body || {};
-		if (!docId) {
-			return res.status(400).json({ success: false, error: "docId is required" });
+		if (!docId || typeof docId !== "string") {
+			return res.status(400).json({ success: false, error: "Invalid document ID" });
 		}
 
-		const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=html`;
-		const response = await fetch(exportUrl, {
-			headers: {
-				"User-Agent": "Mozilla/5.0",
-				Accept: "text/html,application/xhtml+xml"
-			}
-		});
-		if (!response.ok) {
-			throw new Error("Could not fetch Google Doc. Check sharing settings.");
+		if (!/^[a-zA-Z0-9_-]+$/.test(docId)) {
+			return res.status(400).json({ success: false, error: "Invalid Google Docs document ID format" });
 		}
 
-		const html = await response.text();
-		const looksBlocked = /accounts\.google\.com|Sign in|ServiceLogin/i.test(html || "");
-		let cleaned = extractBodyHtml(html);
-
-		if (looksBlocked || cleaned === "<p></p>") {
-			const txtUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
-			const txtResponse = await fetch(txtUrl, {
+		const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
+		let response;
+		try {
+			response = await fetch(exportUrl, {
 				headers: {
 					"User-Agent": "Mozilla/5.0",
-					Accept: "text/plain,text/*;q=0.9,*/*;q=0.8"
-				}
+					Accept: "text/plain"
+				},
+				signal: AbortSignal.timeout(10000)
 			});
-			if (!txtResponse.ok) {
-				throw new Error("Could not fetch Google Doc. Set sharing to Anyone with link can view.");
-			}
-			const txt = await txtResponse.text();
-			cleaned = textToParagraphHtml(txt);
+		} catch {
+			return res.status(400).json({
+				success: false,
+				error: "Could not reach Google Docs. Check internet connection."
+			});
 		}
 
-		return res.json({ success: true, html: cleaned });
+		if (response.status === 401 || response.status === 403) {
+			return res.status(400).json({
+				success: false,
+				error: "Google Doc is private. Go to Share -> Anyone with link -> Viewer."
+			});
+		}
+
+		if (response.status === 404) {
+			return res.status(400).json({
+				success: false,
+				error: "Google Doc not found. Check the URL is correct."
+			});
+		}
+
+		if (!response.ok) {
+			return res.status(400).json({ success: false, error: `Google returned error: ${response.status}` });
+		}
+
+		const text = await response.text();
+		if (!text || text.trim().length < 5) {
+			return res.status(400).json({
+				success: false,
+				error: "Google Doc appears empty or could not be read."
+			});
+		}
+
+		const html = textToParagraphHtml(text);
+		if (!html) {
+			return res.status(400).json({ success: false, error: "No content received from Google Doc." });
+		}
+
+		return res.json({ success: true, html });
 	} catch (error) {
-		next(error);
+		console.error("Google Docs import error:", error);
+		return res.status(500).json({ success: false, error: `Import failed: ${error.message}` });
 	}
 });
 
