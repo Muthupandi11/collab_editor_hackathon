@@ -123,8 +123,14 @@ app.get("/health", async (_req, res) => {
 	}
 });
 
-app.use("/api/documents", documentRoutes);
-app.use("/api/revisions", revisionsRoutes);
+app.get("/api/import/test", (_req, res) => {
+	res.json({
+		success: true,
+		message: "Import routes working",
+		mammoth: !!mammoth,
+		pdfParse: !!pdfParse
+	});
+});
 
 app.post("/api/import/docx", upload.single("file"), async (req, res) => {
 	try {
@@ -260,6 +266,10 @@ app.post("/api/import/gdocs", async (req, res) => {
 		return res.status(500).json({ success: false, error: `Import failed: ${error.message}` });
 	}
 });
+
+// Mount document APIs after import routes so import endpoints cannot be shadowed.
+app.use("/api/documents", documentRoutes);
+app.use("/api/revisions", revisionsRoutes);
 
 app.use((req, res) => {
 	res.status(404).json({

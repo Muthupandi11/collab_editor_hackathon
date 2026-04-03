@@ -51,6 +51,7 @@ connectDatabase()
 					host: HOST
 				})
 			);
+			console.log("Import endpoints ready: GET /api/import/test, POST /api/import/docx, POST /api/import/pdf, POST /api/import/gdocs");
 			logInfo("Server listening", { port: PORT, host: HOST });
 		});
 	})
