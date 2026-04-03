@@ -82,6 +82,62 @@ scripts/    Utility scripts
 - Backend: Render/Railway-style Node web service
 - Database: MongoDB Atlas
 
+## 2.1 Packages Used (NPM)
+
+### Frontend runtime dependencies
+- react `^18.3.1`
+- react-dom `^18.3.1`
+- @tiptap/core `^2.6.6`
+- @tiptap/react `^2.6.6`
+- @tiptap/starter-kit `^2.6.6`
+- @tiptap/pm `^2.6.6`
+- @tiptap/extension-collaboration `^2.6.6`
+- @tiptap/extension-collaboration-cursor `^2.6.6`
+- @tiptap/extension-color `^2.27.2`
+- @tiptap/extension-highlight `^2.27.2`
+- @tiptap/extension-strike `^2.27.2`
+- @tiptap/extension-subscript `^2.27.2`
+- @tiptap/extension-superscript `^2.27.2`
+- @tiptap/extension-text-align `^2.27.2`
+- @tiptap/extension-text-style `^2.27.2`
+- @tiptap/extension-underline `^2.6.6`
+- socket.io-client `^4.7.5`
+- yjs `^13.6.18`
+- y-protocols `^1.0.6`
+- y-prosemirror `^1.2.14`
+- mammoth `^1.12.0` (Word import)
+- pdfjs-dist `^5.6.205` (PDF import)
+- lucide-react `^1.7.0`
+- lodash `^4.17.21`
+- nanoid `^5.1.7`
+
+### Frontend dev dependencies
+- vite `^5.4.1`
+- @vitejs/plugin-react `^4.3.1`
+
+### Backend runtime dependencies
+- express `^4.19.2`
+- socket.io `^4.7.5`
+- mongoose `^8.6.1`
+- cors `^2.8.5`
+- dotenv `^16.4.5`
+- yjs `^13.6.18`
+- y-protocols `^1.0.6`
+
+### Backend dev dependencies
+- nodemon `^3.1.4`
+
+### Install commands
+```bash
+# Frontend
+cd frontend
+npm install
+
+# Backend
+cd ../backend
+npm install
+```
+
 ## 3. Architecture Overview
 
 ### High-level flow
