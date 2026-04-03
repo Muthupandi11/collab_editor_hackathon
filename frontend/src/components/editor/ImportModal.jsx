@@ -4,10 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 const MAX_PDF = 10 * 1024 * 1024;
 const MAX_DOCX = 20 * 1024 * 1024;
 
+const escapeHtml = (value) =>
+	String(value || "")
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+
 async function extractPdfText(file) {
 	const pdfjsLib = await import("pdfjs-dist");
-	const workerVersion = pdfjsLib.version || "3.11.174";
-	pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${workerVersion}/pdf.worker.min.js`;
+	pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 	const arrayBuffer = await file.arrayBuffer();
 	const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
@@ -15,11 +20,26 @@ async function extractPdfText(file) {
 	for (let i = 1; i <= pdf.numPages; i += 1) {
 		const page = await pdf.getPage(i);
 		const content = await page.getTextContent();
-		const pageText = content.items
-			.map((item) => (typeof item?.str === "string" ? item.str : ""))
-			.filter(Boolean)
-			.join(" ");
-		fullText += `${pageText}\n\n`;
+		const lines = {};
+		content.items.forEach((item) => {
+			if (!item?.str || !String(item.str).trim()) {
+				return;
+			}
+			const y = Math.round(item?.transform?.[5] || 0);
+			if (!lines[y]) {
+				lines[y] = [];
+			}
+			lines[y].push(String(item.str));
+		});
+
+		const pageLines = Object.keys(lines)
+			.sort((a, b) => Number(b) - Number(a))
+			.map((y) => lines[y].join(" ").trim())
+			.filter(Boolean);
+
+		if (pageLines.length > 0) {
+			fullText += `${pageLines.join("\n")}\n\n`;
+		}
 	}
 	return fullText;
 }
@@ -29,42 +49,64 @@ function toParagraphHtml(text) {
 		.split("\n\n")
 		.map((chunk) => chunk.trim())
 		.filter(Boolean)
-		.map((chunk) => `<p>${chunk.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`)
+		.map((chunk) => `<p>${escapeHtml(chunk)}</p>`)
 		.join("");
 }
 
-function normalizeImportedHtml(input) {
-	const fallback = "<p></p>";
-	const raw = String(input || "").trim();
-	if (!raw) {
-		return fallback;
+function sanitizeForTipTap(html) {
+	if (!html || typeof html !== "string") {
+		return "<p></p>";
 	}
 
-	const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(raw);
-	if (!looksLikeHtml) {
-		return toParagraphHtml(raw) || fallback;
+	let clean = html;
+	clean = clean.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+	clean = clean.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+	clean = clean.replace(/<meta[^>]*>/gi, "");
+	clean = clean.replace(/<link[^>]*>/gi, "");
+	clean = clean.replace(/<html[^>]*>/gi, "");
+	clean = clean.replace(/<\/html>/gi, "");
+	clean = clean.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "");
+	clean = clean.replace(/<body[^>]*>/gi, "");
+	clean = clean.replace(/<\/body>/gi, "");
+	clean = clean.replace(/<(iframe|object|embed|noscript)[^>]*>[\s\S]*?<\/\1>/gi, "");
+	clean = clean.replace(/<(iframe|object|embed|noscript)[^>]*\/?\s*>/gi, "");
+
+	clean = clean.replace(/<div[^>]*>/gi, "<p>");
+	clean = clean.replace(/<\/div>/gi, "</p>");
+
+	clean = clean.replace(/\s+style="[^"]*"/gi, "");
+	clean = clean.replace(/\s+class="[^"]*"/gi, "");
+	clean = clean.replace(/\s+id="[^"]*"/gi, "");
+	clean = clean.replace(/\s+lang="[^"]*"/gi, "");
+	clean = clean.replace(/\s+xml:[^=]+="[^"]*"/gi, "");
+
+	clean = clean.replace(/<img[^>]*>/gi, "");
+	clean = clean.replace(/<figure[^>]*>/gi, "");
+	clean = clean.replace(/<\/figure>/gi, "");
+	clean = clean.replace(/<figcaption[^>]*>[\s\S]*?<\/figcaption>/gi, "");
+	clean = clean.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, "<p>[Table content removed - tables not supported]</p>");
+
+	clean = clean.replace(/<p[^>]*>\s*<p[^>]*>/gi, "<p>");
+	clean = clean.replace(/<\/p>\s*<\/p>/gi, "</p>");
+	clean = clean.replace(/<(ul|ol)[^>]*>\s*<p[^>]*>/gi, "<$1>");
+	clean = clean.replace(/<\/p>\s*<\/(ul|ol)>/gi, "</$1>");
+
+	clean = clean.replace(/<p[^>]*>\s*<\/(h[1-6]|ul|ol|blockquote|pre)>/gi, "</$1>");
+	clean = clean.replace(/<(h[1-6]|ul|ol|blockquote|pre)[^>]*>\s*<\/p>/gi, "<$1>");
+
+	clean = clean.replace(/<p[^>]*>\s*<\/p>/gi, "");
+	clean = clean.replace(/<p[^>]*>&nbsp;<\/p>/gi, "");
+
+	const hasBlockTags = /<(p|h[1-6]|ul|ol|li|blockquote|pre)[^>]*>/i.test(clean);
+	if (!hasBlockTags && clean.trim()) {
+		clean = `<p>${clean.trim()}</p>`;
 	}
 
-	try {
-		const parser = new DOMParser();
-		const doc = parser.parseFromString(raw, "text/html");
-		const root = doc.body || doc.documentElement;
-		if (!root) {
-			return fallback;
-		}
-
-		root.querySelectorAll("script, style, iframe, object, embed, link, meta, noscript").forEach((node) => node.remove());
-		root.querySelectorAll("*").forEach((node) => {
-			node.removeAttribute("class");
-			node.removeAttribute("id");
-			node.removeAttribute("style");
-		});
-
-		const html = (root.innerHTML || "").trim();
-		return html || fallback;
-	} catch {
-		return fallback;
+	if (!clean.trim()) {
+		return "<p>No readable content found in file.</p>";
 	}
+
+	return clean;
 }
 
 function htmlToSafeTextHtml(input) {
@@ -77,9 +119,9 @@ function htmlToSafeTextHtml(input) {
 		const parser = new DOMParser();
 		const doc = parser.parseFromString(raw, "text/html");
 		const plain = (doc.body?.textContent || doc.documentElement?.textContent || "").trim();
-		return toParagraphHtml(plain);
+		return sanitizeForTipTap(toParagraphHtml(plain));
 	} catch {
-		return toParagraphHtml(raw.replace(/<[^>]+>/g, " "));
+		return sanitizeForTipTap(toParagraphHtml(raw.replace(/<[^>]+>/g, " ")));
 	}
 }
 
@@ -144,19 +186,27 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 }
 
 		setImportStep("reading");
-		const text = await extractPdfText(file);
+		let text = "";
+		try {
+			text = await extractPdfText(file);
+		} catch (error) {
+			if (String(error?.message || "").toLowerCase().includes("pdfjs")) {
+				throw new Error("pdfjs-dist not installed. Run: npm install pdfjs-dist");
+			}
+			throw new Error(`Cannot open PDF: ${error?.message || "Unknown PDF error"}`);
+		}
 		if (!text || !text.trim()) {
 			throw new Error("No text found in PDF. The PDF may be image-based or scanned.");
 }
 
 		setImportStep("converting");
-		const html = normalizeImportedHtml(toParagraphHtml(text));
+		const html = sanitizeForTipTap(toParagraphHtml(text));
 		if (!html || html.trim() === "" || html === "<p></p>") {
 			throw new Error("No content extracted from file");
 }
 
 		return html;
-};
+	};
 
 	const importDocx = async (file) => {
 		if (!file) {
@@ -167,39 +217,62 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 			"application/msword"
 		];
-		if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith(".docx")) {
-			throw new Error("Please select a valid .docx file");
-}
+		const hasValidExt = [".docx", ".doc"].some((ext) => file.name.toLowerCase().endsWith(ext));
+		if (!validTypes.includes(file.type) && !hasValidExt) {
+			throw new Error("Please select a .docx Word file");
+		}
 
 		if (file.size > MAX_DOCX) {
 			throw new Error("File too large. Maximum size is 20MB");
 }
 
 		setImportStep("reading");
-		const mammoth = await import("mammoth");
+		let mammoth;
+		try {
+			mammoth = await import("mammoth");
+		} catch {
+			throw new Error("mammoth not installed. Run: npm install mammoth");
+		}
 		const arrayBuffer = await file.arrayBuffer();
 
 		setImportStep("converting");
-		const result = await mammoth.convertToHtml({ arrayBuffer });
+		let result;
+		try {
+			result = await mammoth.convertToHtml(
+				{ arrayBuffer },
+				{
+					styleMap: [
+						"p[style-name='Heading 1'] => h1:fresh",
+						"p[style-name='Heading 2'] => h2:fresh",
+						"p[style-name='Heading 3'] => h3:fresh",
+						"b => strong",
+						"i => em",
+						"u => u"
+					]
+				}
+			);
+		} catch (error) {
+			throw new Error(`Failed to read Word file: ${error?.message || "Unknown DOCX error"}`);
+		}
 		if (!result || typeof result.value !== "string") {
-			throw new Error("mammoth returned empty result");
-}
+			throw new Error("Word file conversion returned no content");
+		}
 
 		if (Array.isArray(result.messages) && result.messages.length > 0) {
 			console.warn("Docx warnings:", result.messages);
 }
 
-		let html = normalizeImportedHtml(result.value);
+		let html = sanitizeForTipTap(result.value);
 		if (!html || html === "<p></p>") {
 			const textResult = await mammoth.extractRawText({ arrayBuffer });
-			html = normalizeImportedHtml(textResult?.value || "");
-}
+			html = sanitizeForTipTap(toParagraphHtml(textResult?.value || ""));
+		}
 		if (!html || html === "<p></p>") {
 			html = htmlToSafeTextHtml(result.value || "");
-}
+		}
 		if (!html || html === "<p></p>") {
 			throw new Error("Failed to read Word file: no readable text found");
-}
+		}
 
 		return html;
 };
@@ -239,7 +312,7 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 				throw new Error(data?.error || "Failed to fetch Google Doc");
 			}
 
-			let html = normalizeImportedHtml(data.html);
+			let html = sanitizeForTipTap(data.html || "");
 			if (!html || html === "<p></p>") {
 				html = htmlToSafeTextHtml(data.html || "");
 			}

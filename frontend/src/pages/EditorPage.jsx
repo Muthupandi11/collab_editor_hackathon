@@ -83,64 +83,85 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		return response.json();
 	};
 
-	const normalizeImportContent = (value) => {
-		const fallback = "<p></p>";
-		const raw = String(value || "").trim();
-		if (!raw) {
-			return fallback;
+	const sanitizeForTipTap = (html) => {
+		if (!html || typeof html !== "string") {
+			return "<p></p>";
 		}
 
-		const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(raw);
-		if (!looksLikeHtml) {
-			const escaped = raw
-				.replace(/&/g, "&amp;")
-				.replace(/</g, "&lt;")
-				.replace(/>/g, "&gt;")
-				.split(/\n\n+/)
-				.map((chunk) => chunk.trim())
-				.filter(Boolean)
-				.map((chunk) => `<p>${chunk.replace(/\n/g, "<br />")}</p>`)
-				.join("");
-			return escaped || fallback;
+		let clean = html;
+		clean = clean.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+		clean = clean.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+		clean = clean.replace(/<meta[^>]*>/gi, "");
+		clean = clean.replace(/<link[^>]*>/gi, "");
+		clean = clean.replace(/<html[^>]*>/gi, "");
+		clean = clean.replace(/<\/html>/gi, "");
+		clean = clean.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "");
+		clean = clean.replace(/<body[^>]*>/gi, "");
+		clean = clean.replace(/<\/body>/gi, "");
+
+		clean = clean.replace(/<div[^>]*>/gi, "<p>");
+		clean = clean.replace(/<\/div>/gi, "</p>");
+		clean = clean.replace(/\s+style="[^"]*"/gi, "");
+		clean = clean.replace(/\s+class="[^"]*"/gi, "");
+		clean = clean.replace(/\s+id="[^"]*"/gi, "");
+		clean = clean.replace(/\s+lang="[^"]*"/gi, "");
+		clean = clean.replace(/\s+xml:[^=]+="[^"]*"/gi, "");
+
+		clean = clean.replace(/<img[^>]*>/gi, "");
+		clean = clean.replace(/<figure[^>]*>/gi, "");
+		clean = clean.replace(/<\/figure>/gi, "");
+		clean = clean.replace(/<figcaption[^>]*>[\s\S]*?<\/figcaption>/gi, "");
+		clean = clean.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, "<p>[Table content removed - tables not supported]</p>");
+
+		clean = clean.replace(/<p[^>]*>\s*<p[^>]*>/gi, "<p>");
+		clean = clean.replace(/<\/p>\s*<\/p>/gi, "</p>");
+		clean = clean.replace(/<p[^>]*>\s*<\/p>/gi, "");
+		clean = clean.replace(/<p[^>]*>&nbsp;<\/p>/gi, "");
+
+		const hasBlockTags = /<(p|h[1-6]|ul|ol|li|blockquote)[^>]*>/i.test(clean);
+		if (!hasBlockTags && clean.trim()) {
+			clean = `<p>${clean.trim()}</p>`;
 		}
 
+		if (clean.length > MAX_IMPORT_HTML_LENGTH) {
+			const plain = clean.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+			clean = plain ? `<p>${plain}</p>` : "<p></p>";
+		}
+
+		if (!clean.trim()) {
+			return "<p>No readable content found in file.</p>";
+		}
+
+		return clean;
+	};
+
+	const safeSetContent = (editor, html) => {
+		if (!editor || editor.isDestroyed) {
+			throw new Error("Editor is not available");
+		}
+
+		const safeHtml = sanitizeForTipTap(html);
 		try {
-			const parser = new DOMParser();
-			const doc = parser.parseFromString(raw, "text/html");
-			const root = doc.body || doc.documentElement;
-			if (!root) {
-				return fallback;
-			}
+			editor.commands.setContent(safeHtml, false);
+		} catch (firstErr) {
+			console.error("setContent failed:", firstErr?.message || firstErr);
+			try {
+				const plainText = safeHtml
+					.replace(/<[^>]+>/g, " ")
+					.replace(/\s+/g, " ")
+					.trim();
 
-			root.querySelectorAll("script, style, iframe, object, embed, link, meta, noscript").forEach((node) => node.remove());
-			root.querySelectorAll("*").forEach((node) => {
-				node.removeAttribute("class");
-				node.removeAttribute("id");
-				node.removeAttribute("style");
-				node.removeAttribute("onload");
-				node.removeAttribute("onclick");
-				node.removeAttribute("onerror");
-			});
+				const fallbackHtml = plainText
+					.split(/\n+/)
+					.filter((line) => line.trim())
+					.map((line) => `<p>${line.trim()}</p>`)
+					.join("");
 
-			const html = (root.innerHTML || "").trim();
-			if (!html) {
-				return fallback;
+				editor.commands.setContent(fallbackHtml || "<p>Content imported (formatting removed)</p>", false);
+			} catch (secondErr) {
+				console.error("Fallback setContent failed:", secondErr?.message || secondErr);
+				throw new Error("Could not load content into editor. Try copying the text manually.");
 			}
-			if (html.length > MAX_IMPORT_HTML_LENGTH) {
-				const plain = (root.textContent || "").trim();
-				if (!plain) {
-					return fallback;
-				}
-				return plain
-					.split(/\n\n+/)
-					.map((chunk) => chunk.trim())
-					.filter(Boolean)
-					.map((chunk) => `<p>${chunk.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`)
-					.join("") || fallback;
-			}
-			return html;
-		} catch {
-			return fallback;
 		}
 	};
 
@@ -360,30 +381,14 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 
 	const handleImportContent = useCallback(
 		async ({ html, source }) => {
-			if (!editorRef.current) {
+			if (!editorRef.current || editorRef.current.isDestroyed) {
 				throw new Error("Editor not ready");
 			}
-			const safeHtml = normalizeImportContent(html);
+			const safeHtml = sanitizeForTipTap(String(html || ""));
 			await saveDocument();
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
-			let applied = false;
-			try {
-				editorRef.current.commands.setContent(safeHtml, false);
-				applied = true;
-			} catch {
-				try {
-					const plain = safeHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-					editorRef.current.commands.setContent(normalizeImportContent(plain), false);
-					applied = true;
-				} catch {
-					editorRef.current.commands.setContent("<p>Import failed for this file format. Please try a smaller file.</p>", false);
-				}
-			}
-
-			if (!applied) {
-				throw new Error("Could not apply imported content to editor.");
-			}
+			safeSetContent(editorRef.current, safeHtml);
 
 			hasUnsavedChanges.current = true;
 			await Promise.allSettled([forceSave(), saveDocument()]);

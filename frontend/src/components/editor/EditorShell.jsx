@@ -97,6 +97,12 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 		editorProps: {
 			attributes: {
 				class: "editor-content prose-placeholder"
+			},
+			handleDOMEvents: {
+				error: (_view, event) => {
+					console.error("Editor DOM error:", event);
+					return false;
+				}
 			}
 		},
 		onUpdate: ({ editor: current }) => {
@@ -152,7 +158,7 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 				}
 			})
 		],
-		content: "<p>Start collaborating in real time.</p>"
+		content: "<p></p>"
 	});
 
 	const filteredCommands = useMemo(() => {

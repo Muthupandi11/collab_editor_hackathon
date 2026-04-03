@@ -14,11 +14,17 @@ export default class ErrorBoundary extends React.Component {
 	}
 
 	componentDidCatch(error, info) {
-		console.error("App crashed:", error, info);
+		console.error("=== APP CRASH ===");
+		console.error("Error:", error?.message || error);
+		console.error("Stack:", error?.stack || "No stack");
+		console.error("Component:", info?.componentStack || "No component stack");
 	}
 
 	render() {
 		if (this.state.hasError) {
+			const message = this.state.error?.message || "Unexpected error occurred";
+			const isImportError = /Unexpected case|mammoth|pdfjs|import/i.test(message);
+
 			return (
 				<div
 					style={{
@@ -27,31 +33,48 @@ export default class ErrorBoundary extends React.Component {
 						alignItems: "center",
 						justifyContent: "center",
 						height: "100vh",
-						gap: "16px",
+						gap: "12px",
 						fontFamily: "Inter, sans-serif",
 						padding: "24px",
-						textAlign: "center"
+						textAlign: "center",
+						background: "#F0EEE9"
 					}}
 				>
-					<h2 style={{ fontSize: "20px", fontWeight: "600", margin: 0 }}>Something went wrong</h2>
-					<p style={{ color: "#6B7280", fontSize: "14px", margin: 0 }}>
-						{this.state.error?.message || "Unknown error"}
-					</p>
-					<button
-						type="button"
-						onClick={() => window.location.reload()}
+					<div
 						style={{
-							padding: "10px 24px",
-							background: "#2563EB",
-							color: "white",
-							border: "none",
-							borderRadius: "8px",
-							cursor: "pointer",
-							fontSize: "14px"
+							background: "white",
+							borderRadius: "12px",
+							padding: "32px 40px",
+							maxWidth: "420px",
+							boxShadow: "0 4px 16px rgba(0,0,0,0.1)"
 						}}
 					>
-						Reload Page
-					</button>
+						<div style={{ fontSize: "40px", marginBottom: "16px" }}>⚠</div>
+						<h2 style={{ fontSize: "18px", fontWeight: "600", margin: "0 0 8px", color: "#111827" }}>
+							{isImportError ? "Import Failed" : "Something went wrong"}
+						</h2>
+						<p style={{ fontSize: "13px", color: "#6B7280", margin: "0 0 20px", lineHeight: "1.5" }}>
+							{isImportError
+								? "The file could not be imported into the editor. Try a different file or copy-paste text manually."
+								: message}
+						</p>
+						<button
+							type="button"
+							onClick={() => window.location.reload()}
+							style={{
+								padding: "10px 24px",
+								background: "#2563EB",
+								color: "white",
+								border: "none",
+								borderRadius: "8px",
+								cursor: "pointer",
+								fontSize: "14px",
+								fontWeight: "500"
+							}}
+						>
+							Reload Page
+						</button>
+					</div>
 				</div>
 			);
 		}
