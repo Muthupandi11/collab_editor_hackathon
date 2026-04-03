@@ -517,59 +517,6 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			};
 			iframe.src = blobUrl;
 		}
-		if (type === "gdocs") {
-			const escape = (value) =>
-				String(value || "")
-					.replace(/&/g, "&amp;")
-					.replace(/</g, "&lt;")
-					.replace(/>/g, "&gt;");
-
-			const textForClipboard = `${base}\n\n${plainText || ""}`.trim();
-			const htmlForClipboard = `<!DOCTYPE html><html><body><h1>${escape(base)}</h1>${html}</body></html>`;
-
-			const fallbackCopy = () => {
-				const textarea = document.createElement("textarea");
-				textarea.value = textForClipboard;
-				textarea.setAttribute("readonly", "");
-				textarea.style.position = "fixed";
-				textarea.style.opacity = "0";
-				document.body.appendChild(textarea);
-				textarea.select();
-				try {
-					document.execCommand("copy");
-				} finally {
-					textarea.remove();
-				}
-			};
-
-			const openDocs = () => {
-				const createUrl = `https://docs.google.com/document/create?title=${encodeURIComponent(base)}`;
-				const opened = window.open(createUrl, "_blank", "noopener,noreferrer");
-				if (!opened) {
-					window.open("https://docs.new", "_blank", "noopener,noreferrer");
-				}
-			};
-
-			const copyPromise = typeof ClipboardItem !== "undefined" && navigator.clipboard?.write
-				? navigator.clipboard.write([
-					new ClipboardItem({
-						"text/html": new Blob([htmlForClipboard], { type: "text/html" }),
-						"text/plain": new Blob([textForClipboard], { type: "text/plain" })
-					})
-				])
-				: navigator.clipboard?.writeText
-					? navigator.clipboard.writeText(textForClipboard)
-					: Promise.reject(new Error("Clipboard API unavailable"));
-
-			copyPromise
-				.catch(() => {
-					fallbackCopy();
-				})
-				.finally(() => {
-					openDocs();
-					toast.info("Google Docs opened. Paste with Ctrl+V (or Cmd+V). Rename title if needed.");
-				});
-		}
 		setShowExportMenu(false);
 	};
 
@@ -657,7 +604,6 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 					<button type="button" onClick={() => exportDocument("md")}>Export as Markdown</button>
 					<button type="button" onClick={() => exportDocument("word")}>Export as Word</button>
 					<button type="button" onClick={() => exportDocument("pdf")}>Export as PDF</button>
-					<button type="button" onClick={() => exportDocument("gdocs")}>Open in Google Docs</button>
 				</div>
 			) : null}
 			<ImportModal

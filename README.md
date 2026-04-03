@@ -34,6 +34,7 @@ Security note:
 - In-app collaboration chat.
 - Import support (TXT files only).
 - Export support (TXT, JSON, HTML, Markdown, Word-compatible, PDF print flow).
+- Google Docs export option is currently disabled.
 
 ### Text formatting tools available
 - Headings: H1, H2, H3.
