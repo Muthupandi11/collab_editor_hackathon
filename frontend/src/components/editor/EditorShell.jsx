@@ -13,7 +13,6 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Extension } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
-import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import Toolbar from "./Toolbar.jsx";
 
 const RichTextStyle = Extension.create({
@@ -149,13 +148,6 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 			Collaboration.configure({
 				document: ydoc,
 				field: "content"
-			}),
-			CollaborationCursor.configure({
-				provider: { awareness },
-				user: {
-					name: currentUser.name,
-					color: currentUser.color
-				}
 			})
 		],
 		content: "<p></p>"
