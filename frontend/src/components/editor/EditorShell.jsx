@@ -276,27 +276,7 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 				</div>
 				<div className={`editor-page-frame page-size-${pageSize} border-l border-r border-gray-100 dark:border-gray-700 px-4 relative`}>
 					<EditorContent editor={editor} />
-					{editor && localCursor?.name ? (() => {
-						const selection = localCursor.selection || { from: 1, to: 1 };
-						const marker = getMarkerCoordinates(selection.to || selection.from || 1);
-						if (!marker) {
-							return null;
-						}
-
-						return (
-							<div className="local-cursor-layer" aria-hidden="true">
-								<div
-									className="local-cursor-marker"
-									style={{ left: `${marker.left}px`, top: `${marker.top}px`, borderColor: localCursor.color, color: localCursor.color }}
-								>
-									<span className="local-cursor-line" style={{ backgroundColor: localCursor.color }} />
-									<span className="local-cursor-label" style={{ backgroundColor: localCursor.color }}>
-										{localCursor.name}
-									</span>
-								</div>
-							</div>
-						);
-					})() : null}
+					{/* Local custom cursor marker removed to avoid duplicate self+remote cursor chips. */}
 					{editor && remoteCursors.length > 0 ? (
 						<div className="remote-cursor-layer" aria-hidden="true">
 							{remoteCursors.slice(-6).map((cursor) => {

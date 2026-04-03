@@ -415,6 +415,14 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	}, [typingUsers]);
 
 	const typingUsernames = useMemo(() => typingUsers.map((entry) => entry.username), [typingUsers]);
+	const activeTypingUserIds = useMemo(
+		() => new Set(typingUsers.map((entry) => String(entry.userId))),
+		[typingUsers]
+	);
+	const activeRemoteCursors = useMemo(
+		() => remoteCursors.filter((cursor) => activeTypingUserIds.has(String(cursor.userId))),
+		[activeTypingUserIds, remoteCursors]
+	);
 
 	const saveLabel =
 		saveStatus === "saving"
@@ -664,7 +672,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 										handleSelectionChange(selection);
 										setLocalSelection(selection || { from: 1, to: 1 });
 									}}
-						remoteCursors={isImporting ? [] : remoteCursors}
+						remoteCursors={isImporting ? [] : activeRemoteCursors}
 									localCursor={{
 										name: currentUser.name,
 										color: currentUser.color,
@@ -681,9 +689,9 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 							{loadingDocument ? "Loading..." : saveLabel}
 						</span>
 					</div>
-					{remoteCursors.length > 0 ? (
+					{activeRemoteCursors.length > 0 ? (
 						<div className="cursor-strip">
-							{remoteCursors.slice(-3).map((cursor) => (
+							{activeRemoteCursors.slice(-3).map((cursor) => (
 								<span key={`${cursor.userId}-${cursor.position}`} style={{ borderColor: cursor.color }}>
 									{cursor.username} editing at {cursor.position}
 								</span>
