@@ -29,7 +29,6 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		}),
 		[currentUser.id, currentUser.name, currentUser.color]
 	);
-	const isImportingRef = useRef(false);
 
 	const {
 		ydoc,
@@ -54,7 +53,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		reportCursorMove,
 		updateCursorSelection,
 		forceSave
-	} = useCollaboration({ documentId, currentUser: collaborationUser, importInProgressRef: isImportingRef });
+	} = useCollaboration({ documentId, currentUser: collaborationUser });
 
 	const editorRef = useRef(null);
 	const initialRoomLoadRef = useRef(null);
@@ -386,28 +385,19 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			if (!editorRef.current || editorRef.current.isDestroyed) {
 				throw new Error("Editor not ready");
 			}
-
-			if (!html?.trim()) {
-				throw new Error("No content received");
-			}
-
-			isImportingRef.current = true;
 			setIsImporting(true);
 			const safeHtml = sanitizeForTipTap(String(html || ""));
 			try {
-				safeSetContent(editorRef.current, safeHtml);
+				await saveDocument();
+				await new Promise((resolve) => setTimeout(resolve, 100));
 
-				// Keep sync timing aligned with the working TXT import sequence.
+				safeSetContent(editorRef.current, safeHtml);
 				await new Promise((resolve) => setTimeout(resolve, 100));
 
 				hasUnsavedChanges.current = true;
-				await forceSave();
-				saveDocument().catch((error) => {
-					console.warn("Save after import:", error);
-				});
+				await Promise.allSettled([forceSave(), saveDocument()]);
 				toast.success(`${source} imported and synced to all users`);
 			} finally {
-				isImportingRef.current = false;
 				setIsImporting(false);
 			}
 		},
