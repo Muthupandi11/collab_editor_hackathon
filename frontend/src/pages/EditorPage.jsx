@@ -245,7 +245,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			const shouldHydrateContent = currentText.trim().length === 0 && initialRoomLoadRef.current !== documentId;
 
 			if (content && shouldHydrateContent) {
-				editorRef.current.commands.setContent(content, false);
+				safeSetContent(editorRef.current, content);
 				hasUnsavedChanges.current = false;
 				initialRoomLoadRef.current = documentId;
 			}
@@ -363,7 +363,10 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 				await saveDocument();
 				const restored = await restoreRevision(documentId, revisionId);
 				if (restored?.content) {
-					editorRef.current?.commands.setContent(restored.content, false);
+					if (!editorRef.current || editorRef.current.isDestroyed) {
+						throw new Error("Editor not ready for restore.");
+					}
+					safeSetContent(editorRef.current, restored.content);
 					hasUnsavedChanges.current = true;
 					await forceSave();
 					await saveDocument();

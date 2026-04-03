@@ -23,7 +23,7 @@ export default class ErrorBoundary extends React.Component {
 	render() {
 		if (this.state.hasError) {
 			const message = this.state.error?.message || "Unexpected error occurred";
-			const isImportError = /Unexpected case|mammoth|pdfjs|import/i.test(message);
+			const isImportError = /mammoth|pdfjs|import/i.test(message);
 
 			return (
 				<div
