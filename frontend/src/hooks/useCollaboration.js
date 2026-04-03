@@ -38,10 +38,10 @@ function buildUsersFromAwareness(awareness) {
 
 /**
  * Manages Yjs and awareness synchronization for a document room.
- * @param {{ documentId: string, currentUser: { name: string, color: string } }} params - Hook parameters.
+ * @param {{ documentId: string, currentUser: { name: string, color: string }, importInProgressRef?: { current: boolean } }} params - Hook parameters.
  * @returns {{ ydoc: Y.Doc, awareness: Awareness, ready: boolean, onlineUsers: Array<{ id: number, name: string, color: string, isSelf: boolean }> }}
  */
-export function useCollaboration({ documentId, currentUser }) {
+export function useCollaboration({ documentId, currentUser, importInProgressRef }) {
 	const ydoc = useMemo(() => new Y.Doc(), []);
 	const awareness = useMemo(() => new Awareness(ydoc), [ydoc]);
 	const socketRef = useRef(null);
@@ -143,6 +143,9 @@ export function useCollaboration({ documentId, currentUser }) {
 		};
 
 		const handleRemoteYjsUpdate = (update) => {
+			if (importInProgressRef?.current) {
+				return;
+			}
 			try {
 				const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
 				Y.applyUpdate(ydoc, payload, "remote");
@@ -297,6 +300,9 @@ export function useCollaboration({ documentId, currentUser }) {
 		};
 
 		const handleCursorUpdate = (payload) => {
+			if (importInProgressRef?.current) {
+				return;
+			}
 			if (!payload?.userId) {
 				return;
 			}
@@ -431,7 +437,7 @@ export function useCollaboration({ documentId, currentUser }) {
 				latencyIntervalRef.current = null;
 			}
 		};
-	}, [awareness, currentUser, documentId, ydoc]);
+	}, [awareness, currentUser, documentId, importInProgressRef, ydoc]);
 
 	useEffect(() => {
 		const cleanup = setInterval(() => {
