@@ -365,6 +365,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			}
 			const safeHtml = normalizeImportContent(html);
 			await saveDocument();
+			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			let applied = false;
 			try {

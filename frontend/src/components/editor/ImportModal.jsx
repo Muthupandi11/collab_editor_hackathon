@@ -1,12 +1,14 @@
 import { FileText, Link2, Upload } from "lucide-react";
-import { useMemo, useState } from "react";
-import * as pdfjsLib from "pdfjs-dist";
-import mammoth from "mammoth";
+import { useEffect, useMemo, useState } from "react";
 
 const MAX_PDF = 10 * 1024 * 1024;
 const MAX_DOCX = 20 * 1024 * 1024;
 
 async function extractPdfText(file) {
+	const pdfjsLib = await import("pdfjs-dist");
+	const workerVersion = pdfjsLib.version || "3.11.174";
+	pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${workerVersion}/pdf.worker.min.js`;
+
 	const arrayBuffer = await file.arrayBuffer();
 	const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
 	let fullText = "";
@@ -106,147 +108,195 @@ function extractGoogleDocId(value) {
  * @returns {JSX.Element | null}
  */
 export default function ImportModal({ open, backendUrl, onClose, onImport }) {
-	const [tab, setTab] = useState("pdf");
-	const [file, setFile] = useState(null);
+	const [activeTab, setActiveTab] = useState("pdf");
+	const [selectedFile, setSelectedFile] = useState(null);
 	const [gdocsUrl, setGdocsUrl] = useState("");
-	const [status, setStatus] = useState("idle");
-	const [error, setError] = useState("");
+	const [importStep, setImportStep] = useState("");
+	const [importError, setImportError] = useState("");
+
+	useEffect(() => {
+		setImportError("");
+	}, [activeTab, selectedFile]);
 
 	const title = useMemo(() => {
-		if (status === "reading") return "Reading file...";
-		if (status === "converting") return "Converting...";
-		if (status === "loading") return "Loading into editor...";
+		if (!importStep) return "";
+		if (importStep === "reading") return "Reading file...";
+		if (importStep === "converting") return "Converting...";
+		if (importStep === "loading") return "Loading into editor...";
 		return "";
-	}, [status]);
+	}, [importStep]);
 
 	if (!open) {
 		return null;
 	}
 
-	const handlePdfImport = async () => {
-		setError("");
+	const importPdf = async (file) => {
 		if (!file) {
-			setError("Please select a PDF file.");
-			return;
-		}
-		if (!file.name.toLowerCase().endsWith(".pdf")) {
-			setError("Please select a .pdf file.");
-			return;
-		}
+			throw new Error("No file selected");
+}
+
+		if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+			throw new Error("Please select a valid .pdf file");
+}
+
 		if (file.size > MAX_PDF) {
-			setError("File exceeds 10MB limit.");
-			return;
-		}
+			throw new Error("PDF too large. Maximum size is 10MB");
+}
 
-		try {
-			setStatus("reading");
-			const text = await extractPdfText(file);
-			if (!text || !text.trim()) {
-				throw new Error("No readable text found in this PDF.");
-			}
-			setStatus("converting");
-			const html = normalizeImportedHtml(toParagraphHtml(text));
-			setStatus("loading");
-			await onImport({ html: html === "<p></p>" ? htmlToSafeTextHtml(text) : html, source: file.name });
-			onClose();
-		} catch (importError) {
-			setError(importError?.message || "Could not read file. Is it a valid PDF?");
-		} finally {
-			setStatus("idle");
-		}
-	};
+		setImportStep("reading");
+		const text = await extractPdfText(file);
+		if (!text || !text.trim()) {
+			throw new Error("No text found in PDF. The PDF may be image-based or scanned.");
+}
 
-	const handleDocxImport = async () => {
-		setError("");
+		setImportStep("converting");
+		const html = normalizeImportedHtml(toParagraphHtml(text));
+		if (!html || html.trim() === "" || html === "<p></p>") {
+			throw new Error("No content extracted from file");
+}
+
+		return html;
+};
+
+	const importDocx = async (file) => {
 		if (!file) {
-			setError("Please select a DOCX file.");
-			return;
-		}
-		if (!file.name.toLowerCase().endsWith(".docx")) {
-			setError("Please select a .docx file.");
-			return;
-		}
+			throw new Error("No file selected");
+}
+
+		const validTypes = [
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			"application/msword"
+		];
+		if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith(".docx")) {
+			throw new Error("Please select a valid .docx file");
+}
+
 		if (file.size > MAX_DOCX) {
-			setError("File exceeds 20MB limit.");
-			return;
-		}
+			throw new Error("File too large. Maximum size is 20MB");
+}
 
-		try {
-			setStatus("reading");
-			const arrayBuffer = await file.arrayBuffer();
-			setStatus("converting");
-			const result = await mammoth.convertToHtml({ arrayBuffer });
-			if (result.messages.length > 0) {
-				console.warn("Docx conversion warnings:", result.messages);
-			}
-			let html = normalizeImportedHtml(result.value);
-			if (html === "<p></p>") {
-				const textResult = await mammoth.extractRawText({ arrayBuffer });
-				html = normalizeImportedHtml(textResult.value || "");
-			}
-			if (html === "<p></p>") {
-				html = htmlToSafeTextHtml(result.value || "");
-			}
-			if (html === "<p></p>") {
-				throw new Error("Could not extract readable text from this DOCX file.");
-			}
-			setStatus("loading");
-			await onImport({ html, source: file.name });
-			onClose();
-		} catch (importError) {
-			setError(importError?.message || "Could not read file. Is it a valid Word document?");
-		} finally {
-			setStatus("idle");
-		}
-	};
+		setImportStep("reading");
+		const mammoth = await import("mammoth");
+		const arrayBuffer = await file.arrayBuffer();
 
-	const handleGdocsImport = async () => {
-		setError("");
-		const docId = extractGoogleDocId(gdocsUrl);
+		setImportStep("converting");
+		const result = await mammoth.convertToHtml({ arrayBuffer });
+		if (!result || typeof result.value !== "string") {
+			throw new Error("mammoth returned empty result");
+}
+
+		if (Array.isArray(result.messages) && result.messages.length > 0) {
+			console.warn("Docx warnings:", result.messages);
+}
+
+		let html = normalizeImportedHtml(result.value);
+		if (!html || html === "<p></p>") {
+			const textResult = await mammoth.extractRawText({ arrayBuffer });
+			html = normalizeImportedHtml(textResult?.value || "");
+}
+		if (!html || html === "<p></p>") {
+			html = htmlToSafeTextHtml(result.value || "");
+}
+		if (!html || html === "<p></p>") {
+			throw new Error("Failed to read Word file: no readable text found");
+}
+
+		return html;
+};
+
+	const importGoogleDoc = async (url) => {
+		if (!url || !url.trim()) {
+			throw new Error("Please paste a Google Docs URL");
+}
+		if (!url.includes("docs.google.com/document")) {
+			throw new Error("Invalid URL. Must be a Google Docs link like https://docs.google.com/document/d/...");
+}
+
+		const docId = extractGoogleDocId(url);
 		if (!docId) {
-			setError("Invalid Google Docs URL.");
-			return;
-		}
+			throw new Error("Could not find document ID in URL");
+}
 
+		setImportStep("reading");
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 15000);
 		try {
-			setStatus("reading");
 			const response = await fetch(`${backendUrl}/api/import/gdocs`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", Accept: "application/json" },
 				credentials: "include",
-				body: JSON.stringify({ docId })
+				body: JSON.stringify({ docId }),
+				signal: controller.signal
 			});
 
 			const contentType = response.headers.get("content-type") || "";
 			if (!contentType.includes("application/json")) {
-				throw new Error("Google Docs proxy returned non-JSON response.");
+				throw new Error("Backend returned invalid response. Check backend logs.");
 			}
+
 			const data = await response.json();
 			if (!response.ok || !data?.success) {
-				throw new Error(data?.error || "Cannot access Google Doc. Set sharing to Anyone with link.");
+				throw new Error(data?.error || "Failed to fetch Google Doc");
 			}
-			const html = normalizeImportedHtml(data.html);
-			if (html === "<p></p>") {
-				const plainFallback = htmlToSafeTextHtml(data.html || "");
-				if (plainFallback === "<p></p>") {
-					throw new Error("No readable content returned from Google Docs.");
-				}
-				setStatus("loading");
-				await onImport({ html: plainFallback, source: "Google Docs" });
-				onClose();
-				return;
+
+			let html = normalizeImportedHtml(data.html);
+			if (!html || html === "<p></p>") {
+				html = htmlToSafeTextHtml(data.html || "");
 			}
-			setStatus("loading");
-			await onImport({ html, source: "Google Docs" });
+			if (!html || html === "<p></p>") {
+				throw new Error("Google Doc appears empty or could not be read. Ensure sharing is set to Anyone with link can view.");
+			}
+
+			return html;
+		} catch (error) {
+			if (error?.name === "AbortError") {
+				throw new Error("Request timed out. Check your internet connection.");
+			}
+			throw error;
+		} finally {
+			clearTimeout(timeout);
+		}
+};
+
+	const handleImport = async () => {
+		setImportError("");
+
+		if (typeof onImport !== "function") {
+			setImportError("Editor not ready. Please wait.");
+			return;
+		}
+
+		try {
+			let htmlContent = "";
+			let sourceName = "Imported document";
+
+			if (activeTab === "docx") {
+				htmlContent = await importDocx(selectedFile);
+				sourceName = selectedFile?.name || "Word document";
+			} else if (activeTab === "pdf") {
+				htmlContent = await importPdf(selectedFile);
+				sourceName = selectedFile?.name || "PDF";
+			} else {
+				htmlContent = await importGoogleDoc(gdocsUrl);
+				sourceName = "Google Docs";
+			}
+
+			if (!htmlContent || !htmlContent.trim()) {
+				throw new Error("No content extracted from file");
+			}
+
+			setImportStep("loading");
+			await onImport({ html: htmlContent, source: sourceName });
 			onClose();
 		} catch (importError) {
-			setError(importError?.message || "Cannot access Google Doc.");
+			console.error("Import failed:", importError);
+			setImportError(importError?.message || "Import failed. Please try again.");
 		} finally {
-			setStatus("idle");
+			setImportStep("");
 		}
 	};
 
-	const importHandler = tab === "pdf" ? handlePdfImport : tab === "docx" ? handleDocxImport : handleGdocsImport;
+	const importDisabled = !!importStep || (!selectedFile && activeTab !== "gdocs");
 
 	return (
 		<div className="join-modal-overlay" role="dialog" aria-modal="true" aria-label="Import Document">
@@ -254,20 +304,20 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 				<h1>Import Document</h1>
 				<p>Importing will replace current document content. Current content will be auto-saved first.</p>
 				<div className="import-tabs">
-					<button type="button" className={tab === "pdf" ? "active" : ""} onClick={() => { setTab("pdf"); setError(""); }}>PDF</button>
-					<button type="button" className={tab === "docx" ? "active" : ""} onClick={() => { setTab("docx"); setError(""); }}>Word (.docx)</button>
-					<button type="button" className={tab === "gdocs" ? "active" : ""} onClick={() => { setTab("gdocs"); setError(""); }}>Google Docs</button>
+					<button type="button" className={activeTab === "pdf" ? "active" : ""} onClick={() => { setActiveTab("pdf"); setImportError(""); }}>PDF</button>
+					<button type="button" className={activeTab === "docx" ? "active" : ""} onClick={() => { setActiveTab("docx"); setImportError(""); }}>Word (.docx)</button>
+					<button type="button" className={activeTab === "gdocs" ? "active" : ""} onClick={() => { setActiveTab("gdocs"); setImportError(""); }}>Google Docs</button>
 				</div>
 
-				{tab !== "gdocs" ? (
+				{activeTab !== "gdocs" ? (
 					<label className="import-dropzone">
 						<input
 							type="file"
-							accept={tab === "pdf" ? ".pdf" : ".docx"}
-							onChange={(event) => setFile(event.target.files?.[0] || null)}
+							accept={activeTab === "pdf" ? ".pdf" : ".docx"}
+							onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
 						/>
 						<Upload size={18} />
-						<span>{file ? file.name : `Drop or browse ${tab === "pdf" ? "PDF" : "DOCX"} file`}</span>
+						<span>{selectedFile ? selectedFile.name : `Drop or browse ${activeTab === "pdf" ? "PDF" : "DOCX"} file`}</span>
 					</label>
 				) : (
 					<div className="import-gdocs-box">
@@ -284,11 +334,11 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 				)}
 
 				{title ? <div className="import-progress"><span className="ring" />{title}</div> : null}
-				{error ? <div className="join-modal-error">{error}</div> : null}
+				{importError ? <div className="join-modal-error">{importError}</div> : null}
 
 				<div className="import-modal-actions">
 					<button type="button" onClick={onClose}>Cancel</button>
-					<button type="button" onClick={importHandler} disabled={status !== "idle"}>Import</button>
+					<button type="button" onClick={handleImport} disabled={importDisabled}>{importStep ? "Importing..." : "Import"}</button>
 				</div>
 
 				<div className="import-supports">
