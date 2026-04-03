@@ -3,11 +3,8 @@ import express from "express";
 import mammoth from "mammoth";
 import multer from "multer";
 import fetch from "node-fetch";
-import * as pdfParsePackage from "pdf-parse";
 import documentRoutes from "./routes/documentRoutes.js";
 import revisionsRoutes from "./routes/revisions.js";
-
-const pdfParse = pdfParsePackage.default || pdfParsePackage;
 
 const app = express();
 
@@ -55,6 +52,22 @@ const upload = multer({
 	storage: multer.memoryStorage(),
 	limits: { fileSize: 20 * 1024 * 1024 }
 });
+
+let pdfParseCached = null;
+const getPdfParse = async () => {
+	if (pdfParseCached) {
+		return pdfParseCached;
+	}
+
+	const mod = await import("pdf-parse");
+	const parser = mod?.default || mod;
+	if (typeof parser !== "function") {
+		throw new Error("pdf-parse module did not export a parser function");
+	}
+
+	pdfParseCached = parser;
+	return parser;
+};
 
 const escapeHtml = (str) =>
 	String(str || "")
@@ -128,7 +141,7 @@ app.get("/api/import/test", (_req, res) => {
 		success: true,
 		message: "Import routes working",
 		mammoth: !!mammoth,
-		pdfParse: !!pdfParse
+		pdfParserLoaded: !!pdfParseCached
 	});
 });
 
@@ -162,6 +175,16 @@ app.post("/api/import/pdf", upload.single("file"), async (req, res) => {
 	try {
 		if (!req.file) {
 			return res.status(400).json({ success: false, error: "No file uploaded" });
+		}
+
+		let pdfParse;
+		try {
+			pdfParse = await getPdfParse();
+		} catch (error) {
+			return res.status(500).json({
+				success: false,
+				error: `PDF parser unavailable: ${error.message}`
+			});
 		}
 
 		let data;

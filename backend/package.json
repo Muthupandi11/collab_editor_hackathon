@@ -16,7 +16,7 @@
 		"mongoose": "^8.6.1",
 		"multer": "^2.1.1",
 		"node-fetch": "^3.3.2",
-		"pdf-parse": "^2.4.5",
+		"pdf-parse": "^1.1.1",
 		"socket.io": "^4.7.5",
 		"y-protocols": "^1.0.6",
 		"yjs": "^13.6.18"
