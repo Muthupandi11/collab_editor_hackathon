@@ -73,6 +73,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	const [lastSavedAt, setLastSavedAt] = useState(null);
 	const [localSelection, setLocalSelection] = useState({ from: 1, to: 1 });
 	const [pageSize, setPageSize] = useState(() => localStorage.getItem("editorPageSize") || "a4");
+	const [isImporting, setIsImporting] = useState(false);
 
 	const parseJsonSafely = async (response, url) => {
 		const contentType = response.headers.get("content-type") || "";
@@ -384,15 +385,21 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			if (!editorRef.current || editorRef.current.isDestroyed) {
 				throw new Error("Editor not ready");
 			}
+			setIsImporting(true);
 			const safeHtml = sanitizeForTipTap(String(html || ""));
-			await saveDocument();
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			try {
+				await saveDocument();
+				await new Promise((resolve) => setTimeout(resolve, 100));
 
-			safeSetContent(editorRef.current, safeHtml);
+				safeSetContent(editorRef.current, safeHtml);
+				await new Promise((resolve) => setTimeout(resolve, 100));
 
-			hasUnsavedChanges.current = true;
-			await Promise.allSettled([forceSave(), saveDocument()]);
-			toast.success(`${source} imported and synced to all users`);
+				hasUnsavedChanges.current = true;
+				await Promise.allSettled([forceSave(), saveDocument()]);
+				toast.success(`${source} imported and synced to all users`);
+			} finally {
+				setIsImporting(false);
+			}
 		},
 		[forceSave, saveDocument]
 	);
@@ -577,6 +584,9 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 
 	const handleSelectionChange = useCallback(
 		(selection) => {
+			if (isImporting) {
+				return;
+			}
 			if (!selection) {
 				return;
 			}
@@ -584,7 +594,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			reportCursorMove(selection.from);
 			updateCursorSelection(selection);
 		},
-		[reportCursorMove, updateCursorSelection]
+		[isImporting, reportCursorMove, updateCursorSelection]
 	);
 
 	const toggleSection = (key) => {
@@ -686,7 +696,11 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 						awareness={awareness}
 						currentUser={currentUser}
 						ready={ready}
-						onTyping={notifyTyping}
+						onTyping={() => {
+							if (!isImporting) {
+								notifyTyping();
+							}
+						}}
 						onTextStatsChange={setTextStats}
 						onPlainTextChange={(text) => {
 							setEditorText(text);
@@ -704,7 +718,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 										handleSelectionChange(selection);
 										setLocalSelection(selection || { from: 1, to: 1 });
 									}}
-						remoteCursors={remoteCursors}
+						remoteCursors={isImporting ? [] : remoteCursors}
 									localCursor={{
 										name: currentUser.name,
 										color: currentUser.color,

@@ -1,5 +1,6 @@
 import { FileText, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "../../lib/toast.js";
 
 /**
  * Import modal for TXT files only.
@@ -77,14 +78,21 @@ export default function ImportModal({ open, onClose, onImport }) {
 				throw new Error("No content received from server");
 			}
 
+			setImportStep("");
+			setSelectedFile(null);
+			onClose();
+
+			// Critical timing: let modal unmount fully before touching editor content.
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
 			setImportStep("Loading into editor...");
 			await onImport({ html, source });
-			setImportStep("");
-			onClose();
+			await new Promise((resolve) => setTimeout(resolve, 100));
 		} catch (error) {
 			console.error("Import failed:", error);
 			setImportStep("");
 			setImportError(error?.message || "Import failed. Please try again.");
+			toast.error(error?.message || "Import failed. Please try again.");
 		}
 	};
 
