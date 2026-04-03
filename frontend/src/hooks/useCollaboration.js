@@ -66,9 +66,11 @@ function decodeBinaryPayload(raw) {
  * @returns {{ ydoc: Y.Doc, awareness: Awareness, ready: boolean, onlineUsers: Array<{ id: number, name: string, color: string, isSelf: boolean }> }}
  */
 export function useCollaboration({ documentId, currentUser }) {
+	const normalizedRoomId = String(documentId || "").trim();
 	const ydoc = useMemo(() => new Y.Doc(), []);
 	const awareness = useMemo(() => new Awareness(ydoc), [ydoc]);
 	const socketRef = useRef(null);
+	const hasRosterRef = useRef(false);
 	const typingStopTimerRef = useRef(null);
 	const retryCountdownRef = useRef(null);
 	const wakeupTimerRef = useRef(null);
@@ -87,6 +89,7 @@ export function useCollaboration({ documentId, currentUser }) {
 	const [chatMessages, setChatMessages] = useState([]);
 	const [remoteCursors, setRemoteCursors] = useState([]);
 	const [documentRestoreTick, setDocumentRestoreTick] = useState(0);
+	const [remoteTextChange, setRemoteTextChange] = useState(null);
 
 	const startRetryCountdown = (seconds) => {
 		if (retryCountdownRef.current) {
@@ -125,12 +128,21 @@ export function useCollaboration({ documentId, currentUser }) {
 				return;
 			}
 			socket.emit("title-change", {
-				roomId: documentId,
+				roomId: normalizedRoomId,
 				title,
 				updatedBy: currentUser.name
 			});
 		}, 500);
 		titleEmitRef.current = debouncedTitleEmit;
+
+		const normalizeUsersList = (users) =>
+			(Array.isArray(users) ? users : []).map((user, index) => ({
+				id: user?.socketId || `${user?.userId || "u"}-${index}`,
+				userId: String(user?.userId || user?.socketId || ""),
+				name: user?.username || user?.name || "Guest",
+				color: user?.color || "#2563EB",
+				isSelf: String(user?.userId || "") === String(currentUser.id)
+			}));
 
 		// Create debounced emit for Yjs updates (250ms debounce)
 		const debouncedEmitUpdate = debounce(
@@ -141,7 +153,7 @@ export function useCollaboration({ documentId, currentUser }) {
 				}
 				setSaveStatus("saving");
 				socket.emit("yjs-update", { 
-					documentId, 
+					documentId: normalizedRoomId,
 					update: Array.from(update),
 					timestamp: Date.now()
 				}, (response) => {
@@ -179,6 +191,9 @@ export function useCollaboration({ documentId, currentUser }) {
 		};
 
 		const pushAwarenessList = () => {
+			if (hasRosterRef.current) {
+				return;
+			}
 			setOnlineUsers(buildUsersFromAwareness(awareness));
 		};
 
@@ -194,7 +209,7 @@ export function useCollaboration({ documentId, currentUser }) {
 
 			const payload = encodeAwarenessUpdate(awareness, changedClients);
 			socket.emit("awareness-update", {
-				documentId,
+				documentId: normalizedRoomId,
 				update: Array.from(payload),
 				clientId: awareness.clientID
 			});
@@ -215,6 +230,10 @@ export function useCollaboration({ documentId, currentUser }) {
 		};
 
 		const handlePresenceState = (presenceEntries) => {
+			if (hasRosterRef.current) {
+				return;
+			}
+
 			const users = (presenceEntries || [])
 				.map((entry) => {
 					const user = entry?.state?.user;
@@ -240,6 +259,58 @@ export function useCollaboration({ documentId, currentUser }) {
 				});
 
 			setOnlineUsers(users);
+		};
+
+		const handleUsersList = (users) => {
+			hasRosterRef.current = true;
+			setOnlineUsers(normalizeUsersList(users));
+		};
+
+		const handleUserJoined = (user) => {
+			if (!user?.userId) {
+				return;
+			}
+
+			setOnlineUsers((prev) => {
+				if (prev.some((entry) => String(entry.userId || entry.id) === String(user.userId))) {
+					return prev;
+				}
+
+				return [
+					...prev,
+					{
+						id: user.socketId || String(user.userId),
+						userId: String(user.userId),
+						name: user.username || "Guest",
+						color: user.color || "#2563EB",
+						isSelf: String(user.userId) === String(currentUser.id)
+					}
+				];
+			});
+		};
+
+		const handleUserLeft = ({ userId }) => {
+			if (!userId) {
+				return;
+			}
+			setOnlineUsers((prev) => prev.filter((entry) => String(entry.userId || entry.id) !== String(userId)));
+		};
+
+		const handleTextChange = ({ content, roomId }) => {
+			if (typeof content !== "string" || !content.trim()) {
+				return;
+			}
+			if (roomId && String(roomId).trim() !== normalizedRoomId) {
+				return;
+			}
+			setRemoteTextChange({ content, roomId: roomId || normalizedRoomId, at: Date.now() });
+		};
+
+		const handleDocumentContent = ({ content }) => {
+			if (typeof content !== "string" || !content.trim()) {
+				return;
+			}
+			setRemoteTextChange({ content, roomId: normalizedRoomId, at: Date.now() });
 		};
 
 		const handleDisconnect = () => {
@@ -344,20 +415,31 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		socket.on("connect", () => {
 			socket.emit("join-document", {
-				documentId,
-				roomId: documentId,
+				documentId: normalizedRoomId,
+				roomId: normalizedRoomId,
 				userId: currentUser.id,
 				username: currentUser.name,
 				color: currentUser.color,
 				user: currentUser
 			});
 
+			setOnlineUsers([
+				{
+					id: String(currentUser.id || socket.id),
+					userId: String(currentUser.id || socket.id),
+					name: currentUser.name,
+					color: currentUser.color,
+					isSelf: true
+				}
+			]);
+			hasRosterRef.current = false;
+
 			awareness.setLocalStateField("user", {
 				name: currentUser.name,
 				color: currentUser.color
 			});
 			socket.emit("awareness-update", {
-				documentId,
+				documentId: normalizedRoomId,
 				update: Array.from(encodeAwarenessUpdate(awareness, [awareness.clientID])),
 				clientId: awareness.clientID
 			});
@@ -402,6 +484,11 @@ export function useCollaboration({ documentId, currentUser }) {
 		socket.on("receive-message", handleNewMessage);
 		socket.on("message-reaction-updated", handleReactionUpdated);
 		socket.on("cursor-update", handleCursorUpdate);
+		socket.on("users-list", handleUsersList);
+		socket.on("user-joined", handleUserJoined);
+		socket.on("user-left", handleUserLeft);
+		socket.on("text-change", handleTextChange);
+		socket.on("document-content", handleDocumentContent);
 
 		socket.on("document-state", handleRemoteYjsUpdate);
 		socket.on("yjs-update", handleRemoteYjsUpdate);
@@ -415,7 +502,7 @@ export function useCollaboration({ documentId, currentUser }) {
 			if (socket.connected) {
 				socket.emit("user-leave", {
 					userId: currentUser.id,
-					roomId: documentId
+					roomId: normalizedRoomId
 				});
 			}
 		};
@@ -440,6 +527,11 @@ export function useCollaboration({ documentId, currentUser }) {
 			socket.off("receive-message", handleNewMessage);
 			socket.off("message-reaction-updated", handleReactionUpdated);
 			socket.off("cursor-update", handleCursorUpdate);
+			socket.off("users-list", handleUsersList);
+			socket.off("user-joined", handleUserJoined);
+			socket.off("user-left", handleUserLeft);
+			socket.off("text-change", handleTextChange);
+			socket.off("document-content", handleDocumentContent);
 			socket.disconnect();
 			socketRef.current = null;
 			debouncedEmitUpdate.cancel();
@@ -461,7 +553,7 @@ export function useCollaboration({ documentId, currentUser }) {
 				latencyIntervalRef.current = null;
 			}
 		};
-	}, [awareness, currentUser, documentId, ydoc]);
+	}, [awareness, currentUser, normalizedRoomId, ydoc]);
 
 	useEffect(() => {
 		const cleanup = setInterval(() => {
@@ -481,7 +573,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		}
 
 		socketRef.current.emit("typing-start", {
-			roomId: documentId,
+			roomId: normalizedRoomId,
 			userId: currentUser.id,
 			username: currentUser.name
 		});
@@ -492,7 +584,7 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		typingStopTimerRef.current = setTimeout(() => {
 			socketRef.current?.emit("typing-stop", {
-				roomId: documentId,
+				roomId: normalizedRoomId,
 				userId: currentUser.id
 			});
 		}, 2000);
@@ -539,7 +631,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		});
 
 		socketRef.current.emit("user-rename", {
-			roomId: documentId,
+			roomId: normalizedRoomId,
 			userId: user.id,
 			username: user.name,
 			color: user.color
@@ -558,7 +650,7 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		socketRef.current.emit("send-message", {
 			message,
-			roomId: documentId,
+			roomId: normalizedRoomId,
 			userId: currentUser.id,
 			username: currentUser.name,
 			color: currentUser.color
@@ -577,7 +669,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		}
 
 		socketRef.current.emit("message-reaction", {
-			roomId: documentId,
+			roomId: normalizedRoomId,
 			messageId,
 			emoji,
 			userId: currentUser.id,
@@ -596,11 +688,28 @@ export function useCollaboration({ documentId, currentUser }) {
 		}
 
 		socketRef.current.emit("cursor-move", {
-			roomId: documentId,
+			roomId: normalizedRoomId,
 			userId: currentUser.id,
 			username: currentUser.name,
 			color: currentUser.color,
 			position
+		});
+	}
+
+	/**
+	 * Fallback HTML synchronization channel.
+	 * @param {string} content
+	 */
+	function emitTextChange(content) {
+		if (!socketRef.current?.connected || typeof content !== "string" || !content.trim()) {
+			return;
+		}
+
+		socketRef.current.emit("text-change", {
+			content,
+			roomId: normalizedRoomId,
+			userId: currentUser.id,
+			username: currentUser.name
 		});
 	}
 
@@ -637,7 +746,7 @@ export function useCollaboration({ documentId, currentUser }) {
 			socketRef.current.emit(
 				"yjs-update",
 				{
-					documentId,
+					documentId: normalizedRoomId,
 					update: Array.from(update),
 					timestamp: Date.now()
 				},
@@ -668,7 +777,7 @@ export function useCollaboration({ documentId, currentUser }) {
 			socketRef.current.emit(
 				"restore-document",
 				{
-					documentId,
+					documentId: normalizedRoomId,
 					revisionId,
 					restoredBy: currentUser.name
 				},
@@ -699,6 +808,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		onlineUsers,
 		chatMessages,
 		remoteCursors,
+		remoteTextChange,
 		documentRestoreTick,
 		notifyTyping,
 		updateDocumentTitle,
@@ -707,6 +817,7 @@ export function useCollaboration({ documentId, currentUser }) {
 		sendChatMessage,
 		reactToMessage,
 		reportCursorMove,
+		emitTextChange,
 		forceSave,
 		requestRevisionRestore,
 		updateCursorSelection

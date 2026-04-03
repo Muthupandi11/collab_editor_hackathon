@@ -12,6 +12,7 @@ const roomTitles = new Map();
 const roomTyping = new Map();
 const roomChats = new Map();
 const roomReactions = new Map();
+const roomContent = new Map();
 const pendingDisconnects = new Map();
 const REFRESH_GRACE_MS = 8000;
 
@@ -37,6 +38,36 @@ function toUint8Array(raw) {
 	}
 
 	return new Uint8Array();
+}
+
+/**
+ * Builds a normalized roster for a socket room from adapter state.
+ * @param {import("socket.io").Server} io
+ * @param {string} roomId
+ * @returns {Array<{ userId: string, username: string, color: string, socketId: string }>}
+ */
+function listUsersInRoom(io, roomId) {
+	const members = io.sockets.adapter.rooms.get(roomId);
+	if (!members) {
+		return [];
+	}
+
+	const users = [];
+	for (const socketId of members) {
+		const memberSocket = io.sockets.sockets.get(socketId);
+		if (!memberSocket?.data?.username) {
+			continue;
+		}
+
+		users.push({
+			userId: String(memberSocket.data.userId || socketId),
+			username: memberSocket.data.username,
+			color: memberSocket.data.color || "#2563EB",
+			socketId
+		});
+	}
+
+	return users;
 }
 
 /**
@@ -112,10 +143,17 @@ export function registerCollaborationSocket(io) {
 		});
 
 		socket.on("join-document", (payload = {}) => {
-			const documentId = payload.documentId || payload.roomId;
-			if (!documentId) {
+			const rawRoomId = payload.documentId || payload.roomId;
+			console.log("roomId exact:", JSON.stringify(rawRoomId));
+			console.log("roomId length:", rawRoomId?.length);
+
+			if (!rawRoomId || typeof rawRoomId !== "string" || !rawRoomId.trim()) {
+				console.error("Invalid roomId received:", rawRoomId);
+				socket.emit("error", { message: "Invalid room ID" });
 				return;
 			}
+
+			const documentId = rawRoomId.trim();
 
 			const resolvedUser = payload.user || {
 				id: payload.userId || socket.id,
@@ -123,11 +161,25 @@ export function registerCollaborationSocket(io) {
 				color: payload.color || "#2563EB"
 			};
 
+			console.log("JOIN:", {
+				socketId: socket.id,
+				roomId: documentId,
+				username: resolvedUser.name
+			});
+
 			socket.data.documentId = documentId;
 			socket.data.user = resolvedUser;
+			socket.data.userId = String(resolvedUser.id || socket.id);
+			socket.data.username = resolvedUser.name;
+			socket.data.color = resolvedUser.color;
+			socket.data.roomId = documentId;
 			socket.join(documentId);
 
-			const userKey = `${documentId}:${resolvedUser.id || resolvedUser.name || socket.id}`;
+			const roomMembers = io.sockets.adapter.rooms.get(documentId);
+			console.log("Room size after join:", roomMembers?.size || 0);
+			console.log("Sockets in room:", [...(roomMembers || [])]);
+
+			const userKey = `${documentId}:${socket.data.userId}`;
 			const pending = pendingDisconnects.get(userKey);
 			if (pending) {
 				clearTimeout(pending.timeout);
@@ -151,6 +203,24 @@ export function registerCollaborationSocket(io) {
 				([clientId, state]) => ({ clientId, state })
 			);
 			socket.emit("presence-state", awarenessClients);
+
+			const usersInRoom = listUsersInRoom(io, documentId);
+			console.log("All users in room:", usersInRoom);
+			socket.emit("users-list", usersInRoom);
+			socket.to(documentId).emit("user-joined", {
+				userId: socket.data.userId,
+				username: socket.data.username,
+				color: socket.data.color,
+				socketId: socket.id
+			});
+			socket.to(documentId).emit("users-list", usersInRoom);
+
+			const existingContent = roomContent.get(documentId);
+			if (typeof existingContent === "string" && existingContent.length > 0) {
+				console.log("Sending existing content to new joiner");
+				socket.emit("document-content", { content: existingContent });
+			}
+
 			socket.emit("title-updated", {
 				documentId,
 				title: roomTitles.get(documentId) || "Untitled Document"
@@ -183,6 +253,29 @@ export function registerCollaborationSocket(io) {
 			if (typeof ack === "function") {
 				ack({ ok: true, receivedAt: Date.now() });
 			}
+		});
+
+		socket.on("text-change", ({ roomId, content }) => {
+			const cleanRoomId = typeof roomId === "string" ? roomId.trim() : "";
+			if (!cleanRoomId || typeof content !== "string") {
+				return;
+			}
+
+			console.log(
+				"TEXT-CHANGE from:",
+				socket.data.username,
+				"room:",
+				cleanRoomId,
+				"content length:",
+				content.length
+			);
+
+			roomContent.set(cleanRoomId, content);
+			socket.to(cleanRoomId).emit("text-change", { content, roomId: cleanRoomId });
+
+			const members = io.sockets.adapter.rooms.get(cleanRoomId);
+			console.log("Broadcasted to room:", cleanRoomId);
+			console.log("Room members count:", members?.size || 0);
 		});
 
 		socket.on("awareness-update", ({ documentId, update, clientId }) => {
@@ -426,7 +519,11 @@ export function registerCollaborationSocket(io) {
 			}
 
 			const user = socket.data.user || {};
-			const userKey = `${documentId}:${user.id || user.name || socket.id}`;
+			const userId = String(socket.data.userId || user.id || socket.id);
+			const username = socket.data.username || user.name || "Guest";
+			const roomId = socket.data.roomId || documentId;
+			console.log("DISCONNECT:", username, "from room:", roomId);
+			const userKey = `${documentId}:${userId}`;
 			const timeout = setTimeout(() => {
 				pendingDisconnects.delete(userKey);
 
@@ -442,6 +539,12 @@ export function registerCollaborationSocket(io) {
 					const payload = awarenessProtocol.encodeAwarenessUpdate(room.awareness, awarenessIds);
 					socket.to(documentId).emit("awareness-update", Array.from(payload));
 				}
+
+				socket.to(roomId).emit("user-left", {
+					userId,
+					username
+				});
+				socket.to(roomId).emit("users-list", listUsersInRoom(io, roomId));
 
 				cleanupRoomIfEmpty(documentId);
 				logInfo("Socket disconnected", { socketId: socket.id, documentId });
