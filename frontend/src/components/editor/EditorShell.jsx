@@ -193,6 +193,29 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 
 	const showTemplatePicker = editor && !templateDismissed && editor.isEmpty;
 
+	const getMarkerCoordinates = (position) => {
+		if (!editor) {
+			return null;
+		}
+
+		try {
+			const resolved = Math.max(1, Math.min(position || 1, editor.state.doc.content.size));
+			const coords = editor.view.coordsAtPos(resolved);
+			const layer = editorContainerRef.current?.querySelector(".editor-page-frame");
+			const layerRect = layer?.getBoundingClientRect();
+			if (!layerRect) {
+				return null;
+			}
+
+			return {
+				left: Math.max(0, coords.left - layerRect.left),
+				top: Math.max(0, coords.top - layerRect.top)
+			};
+		} catch {
+			return null;
+		}
+	};
+
 	return (
 		<div
 			ref={editorContainerRef}
@@ -248,56 +271,46 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 				<div className={`editor-page-frame page-size-${pageSize} border-l border-r border-gray-100 dark:border-gray-700 px-4 relative`}>
 					<EditorContent editor={editor} />
 					{editor && localCursor?.name ? (() => {
-						try {
-							const selection = localCursor.selection || { from: 1, to: 1 };
-							const resolvedPosition = Math.max(1, Math.min(selection.to || selection.from || 1, editor.state.doc.content.size));
-							const coords = editor.view.coordsAtPos(resolvedPosition);
-							const editorRect = editor.view.dom.getBoundingClientRect();
-							const left = Math.max(0, coords.left - editorRect.left);
-							const top = Math.max(0, coords.top - editorRect.top);
-
-							return (
-								<div className="local-cursor-layer" aria-hidden="true">
-									<div
-										className="local-cursor-marker"
-										style={{ left: `${left}px`, top: `${top}px`, borderColor: localCursor.color, color: localCursor.color }}
-									>
-										<span className="local-cursor-line" style={{ backgroundColor: localCursor.color }} />
-										<span className="local-cursor-label" style={{ backgroundColor: localCursor.color }}>
-											{localCursor.name}
-										</span>
-									</div>
-								</div>
-							);
-						} catch {
+						const selection = localCursor.selection || { from: 1, to: 1 };
+						const marker = getMarkerCoordinates(selection.to || selection.from || 1);
+						if (!marker) {
 							return null;
 						}
+
+						return (
+							<div className="local-cursor-layer" aria-hidden="true">
+								<div
+									className="local-cursor-marker"
+									style={{ left: `${marker.left}px`, top: `${marker.top}px`, borderColor: localCursor.color, color: localCursor.color }}
+								>
+									<span className="local-cursor-line" style={{ backgroundColor: localCursor.color }} />
+									<span className="local-cursor-label" style={{ backgroundColor: localCursor.color }}>
+										{localCursor.name}
+									</span>
+								</div>
+							</div>
+						);
 					})() : null}
 					{editor && remoteCursors.length > 0 ? (
 						<div className="remote-cursor-layer" aria-hidden="true">
 							{remoteCursors.slice(-6).map((cursor) => {
-								try {
-									const resolvedPosition = Math.max(1, Math.min(cursor.position || 1, editor.state.doc.content.size));
-									const coords = editor.view.coordsAtPos(resolvedPosition);
-									const editorRect = editor.view.dom.getBoundingClientRect();
-									const left = Math.max(0, coords.left - editorRect.left);
-									const top = Math.max(0, coords.top - editorRect.top);
-
-									return (
-										<div
-											key={`${cursor.userId}-${cursor.position}`}
-											className="remote-cursor-marker"
-											style={{ left: `${left}px`, top: `${top}px`, borderColor: cursor.color, color: cursor.color }}
-										>
-											<span className="remote-cursor-line" style={{ backgroundColor: cursor.color }} />
-											<span className="remote-cursor-label" style={{ backgroundColor: cursor.color }}>
-												{cursor.username}
-											</span>
-										</div>
-									);
-								} catch {
+								const marker = getMarkerCoordinates(cursor.position || 1);
+								if (!marker) {
 									return null;
 								}
+
+								return (
+									<div
+										key={`${cursor.userId}-${cursor.position}`}
+										className="remote-cursor-marker"
+										style={{ left: `${marker.left}px`, top: `${marker.top}px`, borderColor: cursor.color, color: cursor.color }}
+									>
+										<span className="remote-cursor-line" style={{ backgroundColor: cursor.color }} />
+										<span className="remote-cursor-label" style={{ backgroundColor: cursor.color }}>
+											{cursor.username}
+										</span>
+									</div>
+								);
 							})}
 						</div>
 					) : null}

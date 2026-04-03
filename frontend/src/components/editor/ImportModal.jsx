@@ -125,6 +125,9 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 		try {
 			setStatus("reading");
 			const text = await extractPdfText(file);
+			if (!text || !text.trim()) {
+				throw new Error("No readable text found in this PDF.");
+			}
 			setStatus("converting");
 			const html = normalizeImportedHtml(toParagraphHtml(text));
 			setStatus("loading");
@@ -160,7 +163,14 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			if (result.messages.length > 0) {
 				console.warn("Docx conversion warnings:", result.messages);
 			}
-			const html = normalizeImportedHtml(result.value);
+			let html = normalizeImportedHtml(result.value);
+			if (html === "<p></p>") {
+				const textResult = await mammoth.extractRawText({ arrayBuffer });
+				html = normalizeImportedHtml(textResult.value || "");
+			}
+			if (html === "<p></p>") {
+				throw new Error("Could not extract readable text from this DOCX file.");
+			}
 			setStatus("loading");
 			await onImport({ html, source: file.name });
 			onClose();
@@ -197,6 +207,9 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 				throw new Error(data?.error || "Cannot access Google Doc. Set sharing to Anyone with link.");
 			}
 			const html = normalizeImportedHtml(data.html);
+			if (html === "<p></p>") {
+				throw new Error("No readable content returned from Google Docs.");
+			}
 			setStatus("loading");
 			await onImport({ html, source: "Google Docs" });
 			onClose();

@@ -974,10 +974,84 @@ body {
 	position: sticky;
 	top: 60px;
 	z-index: 99;
-	min-height: 44px;
+	min-height: 48px;
 	overflow: visible;
 	background: var(--bg-surface);
 	border-color: var(--border);
+}
+
+.toolbar-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px;
+	flex-wrap: wrap;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--bg-surface);
+}
+
+.toolbar-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding-right: 6px;
+	margin-right: 2px;
+	border-right: 1px solid var(--border);
+}
+
+.toolbar-group:last-child {
+	border-right: 0;
+	padding-right: 0;
+	margin-right: 0;
+}
+
+.toolbar-inline-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--text-secondary);
+	padding: 0 6px;
+}
+
+.toolbar-tool-btn {
+	height: 30px;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: var(--bg-surface);
+	color: var(--text-primary);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: border-color 140ms ease, background 140ms ease;
+}
+
+.toolbar-tool-btn:hover:not(:disabled) {
+	border-color: #9ca3af;
+	background: var(--bg-hover);
+}
+
+.toolbar-tool-btn.active {
+	background: var(--primary-light);
+	border-color: #93c5fd;
+	color: var(--primary-dark);
+}
+
+.toolbar-tool-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.toolbar-group-text .toolbar-select {
+	height: 30px;
+	font-size: 11px;
+	border-radius: 7px;
 }
 
 .main-editor-column .editor-card {
@@ -1272,7 +1346,7 @@ html.dark .editor-page-frame {
 
 .remote-cursor-marker {
 	position: absolute;
-	transform: translate(-1px, -10px);
+	transform: translate(-1px, 0);
 	min-width: 1px;
 	max-width: 220px;
 	white-space: nowrap;
@@ -1289,8 +1363,11 @@ html.dark .editor-page-frame {
 }
 
 .remote-cursor-label {
-	display: inline-block;
-	margin-left: 4px;
+	position: absolute;
+	top: -22px;
+	left: 4px;
+	display: inline-flex;
+	align-items: center;
 	padding: 0.2rem 0.45rem;
 	border-radius: 999px;
 	color: #fff;
@@ -1299,7 +1376,7 @@ html.dark .editor-page-frame {
 
 .local-cursor-marker {
 	position: absolute;
-	transform: translate(-1px, -10px);
+	transform: translate(-1px, 0);
 	min-width: 1px;
 	max-width: 220px;
 	white-space: nowrap;
@@ -1317,8 +1394,11 @@ html.dark .editor-page-frame {
 }
 
 .local-cursor-label {
-	display: inline-block;
-	margin-left: 4px;
+	position: absolute;
+	top: -22px;
+	left: 4px;
+	display: inline-flex;
+	align-items: center;
 	padding: 0.2rem 0.45rem;
 	border-radius: 999px;
 	color: #fff;
@@ -1647,6 +1727,10 @@ html.dark .editor-page-frame {
 	.right-sidebar { display: none; }
 	.main-editor-column .toolbar { overflow-x: auto; }
 	.main-editor-column .editor-card { padding: 24px 20px; }
+	.toolbar-row {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+	}
 	.editor-page-frame.page-size-a4,
 	.editor-page-frame.page-size-letter,
 	.editor-page-frame.page-size-fluid {

@@ -82,6 +82,52 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		return response.json();
 	};
 
+	const normalizeImportContent = (value) => {
+		const fallback = "<p></p>";
+		const raw = String(value || "").trim();
+		if (!raw) {
+			return fallback;
+		}
+
+		const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(raw);
+		if (!looksLikeHtml) {
+			const escaped = raw
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.split(/\n\n+/)
+				.map((chunk) => chunk.trim())
+				.filter(Boolean)
+				.map((chunk) => `<p>${chunk.replace(/\n/g, "<br />")}</p>`)
+				.join("");
+			return escaped || fallback;
+		}
+
+		try {
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(raw, "text/html");
+			const root = doc.body || doc.documentElement;
+			if (!root) {
+				return fallback;
+			}
+
+			root.querySelectorAll("script, style, iframe, object, embed, link, meta, noscript").forEach((node) => node.remove());
+			root.querySelectorAll("*").forEach((node) => {
+				node.removeAttribute("class");
+				node.removeAttribute("id");
+				node.removeAttribute("style");
+				node.removeAttribute("onload");
+				node.removeAttribute("onclick");
+				node.removeAttribute("onerror");
+			});
+
+			const html = (root.innerHTML || "").trim();
+			return html || fallback;
+		} catch {
+			return fallback;
+		}
+	};
+
 	const loadRevisions = useCallback(async () => {
 		setLoadingRevisions(true);
 		setRevisionError("");
@@ -301,9 +347,16 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			if (!editorRef.current) {
 				throw new Error("Editor not ready");
 			}
-			const safeHtml = String(html || "").trim() || "<p></p>";
+			const safeHtml = normalizeImportContent(html);
 			await saveDocument();
-			editorRef.current.commands.setContent(safeHtml, false);
+			try {
+				editorRef.current.commands.setContent(safeHtml, false);
+			} catch {
+				const plain = editorRef.current
+					.getTextFromHTML?.(safeHtml)
+					|| safeHtml.replace(/<[^>]+>/g, " ");
+				editorRef.current.commands.setContent(normalizeImportContent(plain), false);
+			}
 			hasUnsavedChanges.current = true;
 			await forceSave();
 			await saveDocument();
