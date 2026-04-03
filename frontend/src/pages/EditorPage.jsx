@@ -611,7 +611,6 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			) : null}
 			<ImportModal
 				open={showImportModal}
-				backendUrl={BACKEND_URL}
 				onClose={() => setShowImportModal(false)}
 				onImport={handleImportContent}
 			/>

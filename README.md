@@ -32,7 +32,7 @@ Security note:
 - Colored cursor tracking per user.
 - Revision history with restore support.
 - In-app collaboration chat.
-- Import support (PDF, DOCX, Google Docs via backend proxy).
+- Import support (TXT files only).
 - Export support (TXT, JSON, HTML, Markdown, Word-compatible, PDF print flow).
 
 ### Text formatting tools available
@@ -66,8 +66,6 @@ scripts/    Utility scripts
 - Yjs + y-protocols + y-prosemirror
 - Socket.IO client
 - Lucide React icons
-- pdfjs-dist (PDF import)
-- mammoth (DOCX import)
 
 ### Backend
 - Node.js (ES modules)
@@ -76,6 +74,9 @@ scripts/    Utility scripts
 - Yjs + y-protocols
 - Mongoose
 - MongoDB Atlas
+- Multer (file uploads)
+- Mammoth (server-side DOCX parsing for future enhancement)
+- pdf-parse (server-side PDF parsing for future enhancement)
 
 ### Deployment
 - Frontend: Vercel
@@ -105,8 +106,6 @@ scripts/    Utility scripts
 - yjs `^13.6.18`
 - y-protocols `^1.0.6`
 - y-prosemirror `^1.2.14`
-- mammoth `^1.12.0` (Word import)
-- pdfjs-dist `^5.6.205` (PDF import)
 - lucide-react `^1.7.0`
 - lodash `^4.17.21`
 - nanoid `^5.1.7`
@@ -121,6 +120,10 @@ scripts/    Utility scripts
 - mongoose `^8.6.1`
 - cors `^2.8.5`
 - dotenv `^16.4.5`
+- mammoth `^1.12.0`
+- multer `^2.1.1`
+- node-fetch `^3.3.2`
+- pdf-parse `^2.4.5`
 - yjs `^13.6.18`
 - y-protocols `^1.0.6`
 
@@ -289,3 +292,7 @@ AI assistance was used for:
 - Add structured observability (metrics, tracing, error dashboards).
 - Improve bundle splitting and performance budgets.
 - Add stronger role-based auth and document access controls.
+- Re-enable multi-format import (DOCX/PDF/Google Docs) behind feature flags after broader production validation.
+- Add OCR-based import for scanned PDFs (image-only files).
+- Add import preview panel before replacing document content.
+- Add per-import audit logs (source, size, user, timestamp) for debugging and compliance.
