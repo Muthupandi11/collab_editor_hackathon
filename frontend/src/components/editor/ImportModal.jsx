@@ -3,19 +3,20 @@ import { useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
 const MAX_PDF = 10 * 1024 * 1024;
 const MAX_DOCX = 20 * 1024 * 1024;
 
 async function extractPdfText(file) {
 	const arrayBuffer = await file.arrayBuffer();
-	const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+	const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
 	let fullText = "";
 	for (let i = 1; i <= pdf.numPages; i += 1) {
 		const page = await pdf.getPage(i);
 		const content = await page.getTextContent();
-		const pageText = content.items.map((item) => item.str).join(" ");
+		const pageText = content.items
+			.map((item) => (typeof item?.str === "string" ? item.str : ""))
+			.filter(Boolean)
+			.join(" ");
 		fullText += `${pageText}\n\n`;
 	}
 	return fullText;
@@ -28,6 +29,54 @@ function toParagraphHtml(text) {
 		.filter(Boolean)
 		.map((chunk) => `<p>${chunk.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`)
 		.join("");
+}
+
+function normalizeImportedHtml(input) {
+	const fallback = "<p></p>";
+	const raw = String(input || "").trim();
+	if (!raw) {
+		return fallback;
+	}
+
+	const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(raw);
+	if (!looksLikeHtml) {
+		return toParagraphHtml(raw) || fallback;
+	}
+
+	try {
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(raw, "text/html");
+		const root = doc.body || doc.documentElement;
+		if (!root) {
+			return fallback;
+		}
+
+		root.querySelectorAll("script, style, iframe, object, embed, link, meta, noscript").forEach((node) => node.remove());
+		root.querySelectorAll("*").forEach((node) => {
+			node.removeAttribute("class");
+			node.removeAttribute("id");
+			node.removeAttribute("style");
+		});
+
+		const html = (root.innerHTML || "").trim();
+		return html || fallback;
+	} catch {
+		return fallback;
+	}
+}
+
+function extractGoogleDocId(value) {
+	const text = String(value || "").trim();
+	if (!text) {
+		return "";
+	}
+
+	if (/^[a-zA-Z0-9-_]{20,}$/.test(text)) {
+		return text;
+	}
+
+	const match = text.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
+	return match?.[1] || "";
 }
 
 /**
@@ -77,7 +126,7 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			setStatus("reading");
 			const text = await extractPdfText(file);
 			setStatus("converting");
-			const html = toParagraphHtml(text);
+			const html = normalizeImportedHtml(toParagraphHtml(text));
 			setStatus("loading");
 			await onImport({ html, source: file.name });
 			onClose();
@@ -111,8 +160,9 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			if (result.messages.length > 0) {
 				console.warn("Docx conversion warnings:", result.messages);
 			}
+			const html = normalizeImportedHtml(result.value);
 			setStatus("loading");
-			await onImport({ html: result.value, source: file.name });
+			await onImport({ html, source: file.name });
 			onClose();
 		} catch (importError) {
 			setError(importError?.message || "Could not read file. Is it a valid Word document?");
@@ -123,8 +173,8 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 
 	const handleGdocsImport = async () => {
 		setError("");
-		const match = gdocsUrl.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
-		if (!match) {
+		const docId = extractGoogleDocId(gdocsUrl);
+		if (!docId) {
 			setError("Invalid Google Docs URL.");
 			return;
 		}
@@ -135,7 +185,7 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 				method: "POST",
 				headers: { "Content-Type": "application/json", Accept: "application/json" },
 				credentials: "include",
-				body: JSON.stringify({ docId: match[1] })
+				body: JSON.stringify({ docId })
 			});
 
 			const contentType = response.headers.get("content-type") || "";
@@ -146,8 +196,9 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			if (!response.ok || !data?.success) {
 				throw new Error(data?.error || "Cannot access Google Doc. Set sharing to Anyone with link.");
 			}
+			const html = normalizeImportedHtml(data.html);
 			setStatus("loading");
-			await onImport({ html: data.html, source: "Google Docs" });
+			await onImport({ html, source: "Google Docs" });
 			onClose();
 		} catch (importError) {
 			setError(importError?.message || "Cannot access Google Doc.");

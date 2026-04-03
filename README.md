@@ -35,6 +35,19 @@ Security note:
 - Import support (PDF, DOCX, Google Docs via backend proxy).
 - Export support (TXT, JSON, HTML, Markdown, Word-compatible, PDF print flow).
 
+### Text formatting tools available
+- Headings: H1, H2, H3.
+- Paragraph formatting and alignment (left, center, right, justify).
+- Font family and font size controls.
+- Inline styles: bold, italic, underline, strike.
+- Advanced inline styles: subscript, superscript.
+- Colors: text color and highlight color.
+- Lists: bullet list and numbered list.
+- Block styles: blockquote and code block.
+- Insert tools: horizontal rule and slash-command quick insert.
+- Template starter cards: meeting notes, project plan, blog post, blank document.
+- Page view controls: Web (fluid), A4, and Letter canvas modes.
+
 ### Repository layout
 
 ```text

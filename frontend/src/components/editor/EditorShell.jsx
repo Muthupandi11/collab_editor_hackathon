@@ -85,10 +85,10 @@ const templates = [
 
 /**
  * Renders the collaborative TipTap editor and formatting toolbar.
- * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean, onTyping?: () => void, onTextStatsChange?: (payload: { words: number, characters: number, lines: number }) => void, onPlainTextChange?: (text: string) => void, onEditorReady?: (editor: import("@tiptap/react").Editor | null) => void, onSelectionChange?: (selection: { from: number, to: number }) => void, remoteCursors?: Array<{ userId: string | number, username: string, color: string, position: number }>, localCursor?: { name: string, color: string, selection?: { from: number, to: number } }, draftToApply?: string | null, onDraftApplied?: () => void }} props - Editor props.
+ * @param {{ ydoc: import("yjs").Doc, awareness: import("y-protocols/awareness").Awareness, currentUser: { name: string, color: string }, ready: boolean, onTyping?: () => void, onTextStatsChange?: (payload: { words: number, characters: number, lines: number }) => void, onPlainTextChange?: (text: string) => void, onEditorReady?: (editor: import("@tiptap/react").Editor | null) => void, onSelectionChange?: (selection: { from: number, to: number }) => void, remoteCursors?: Array<{ userId: string | number, username: string, color: string, position: number }>, localCursor?: { name: string, color: string, selection?: { from: number, to: number } }, draftToApply?: string | null, onDraftApplied?: () => void, pageSize?: "fluid" | "a4" | "letter", onPageSizeChange?: (size: "fluid" | "a4" | "letter") => void }} props - Editor props.
  * @returns {JSX.Element}
  */
-export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange, onPlainTextChange, onEditorReady, onSelectionChange, remoteCursors = [], localCursor = null, draftToApply, onDraftApplied }) {
+export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyping, onTextStatsChange, onPlainTextChange, onEditorReady, onSelectionChange, remoteCursors = [], localCursor = null, draftToApply, onDraftApplied, pageSize = "fluid", onPageSizeChange }) {
 	const editorContainerRef = useRef(null);
 	const [slashState, setSlashState] = useState({ open: false, query: "", index: 0, top: 0, left: 0 });
 	const [templateDismissed, setTemplateDismissed] = useState(false);
@@ -232,7 +232,20 @@ export default function EditorShell({ ydoc, awareness, currentUser, ready, onTyp
 		>
 			<Toolbar editor={editor} ready={ready} />
 			<div className="editor-card bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8">
-				<div className="mx-auto max-w-[800px] border-l border-r border-gray-100 dark:border-gray-700 px-4 relative">
+				<div className="editor-frame-header">
+					<label htmlFor="page-size-select" className="editor-frame-label">Page Size</label>
+					<select
+						id="page-size-select"
+						className="toolbar-select"
+						value={pageSize}
+						onChange={(event) => onPageSizeChange?.(event.target.value)}
+					>
+						<option value="fluid">Web (Fluid)</option>
+						<option value="a4">A4</option>
+						<option value="letter">Letter</option>
+					</select>
+				</div>
+				<div className={`editor-page-frame page-size-${pageSize} border-l border-r border-gray-100 dark:border-gray-700 px-4 relative`}>
 					<EditorContent editor={editor} />
 					{editor && localCursor?.name ? (() => {
 						try {

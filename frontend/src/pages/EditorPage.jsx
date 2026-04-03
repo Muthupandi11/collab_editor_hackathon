@@ -71,6 +71,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	const [loadingDocument, setLoadingDocument] = useState(false);
 	const [lastSavedAt, setLastSavedAt] = useState(null);
 	const [localSelection, setLocalSelection] = useState({ from: 1, to: 1 });
+	const [pageSize, setPageSize] = useState(() => localStorage.getItem("editorPageSize") || "a4");
 
 	const parseJsonSafely = async (response, url) => {
 		const contentType = response.headers.get("content-type") || "";
@@ -300,8 +301,9 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			if (!editorRef.current) {
 				throw new Error("Editor not ready");
 			}
+			const safeHtml = String(html || "").trim() || "<p></p>";
 			await saveDocument();
-			editorRef.current.commands.setContent(html || "<p></p>", false);
+			editorRef.current.commands.setContent(safeHtml, false);
 			hasUnsavedChanges.current = true;
 			await forceSave();
 			await saveDocument();
@@ -392,16 +394,36 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			downloadBlob(new Blob([wordDoc], { type: "application/msword" }), `${base}.doc`);
 		}
 		if (type === "pdf") {
-			const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=800");
-			if (!printWindow) {
-				toast.error("Popup blocked. Allow popups to export PDF.");
-				setShowExportMenu(false);
-				return;
-			}
-			printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${base}</title><style>body{font-family:Inter,Arial,sans-serif;padding:32px;line-height:1.6;} h1,h2,h3{margin-top:1.2em;} p{margin:0.6em 0;} ul,ol{margin:0.6em 0 0.8em 1.2em;}</style></head><body>${html}</body></html>`);
-			printWindow.document.close();
-			printWindow.focus();
-			printWindow.print();
+			const pageCss =
+				pageSize === "a4"
+					? "@page{size:A4;margin:16mm;}"
+					: pageSize === "letter"
+						? "@page{size:Letter;margin:16mm;}"
+						: "@page{margin:16mm;}";
+			const docHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${base}</title><style>${pageCss} body{font-family:Calibri,Segoe UI,Arial,sans-serif;padding:0;line-height:1.55;color:#111827;} h1,h2,h3{margin-top:1.2em;} p{margin:0.6em 0;} ul,ol{margin:0.6em 0 0.8em 1.2em;} </style></head><body>${html}</body></html>`;
+			const blob = new Blob([docHtml], { type: "text/html" });
+			const blobUrl = URL.createObjectURL(blob);
+			const iframe = document.createElement("iframe");
+			iframe.style.position = "fixed";
+			iframe.style.right = "0";
+			iframe.style.bottom = "0";
+			iframe.style.width = "0";
+			iframe.style.height = "0";
+			iframe.style.border = "0";
+			document.body.appendChild(iframe);
+			iframe.onload = () => {
+				try {
+					iframe.contentWindow?.focus();
+					iframe.contentWindow?.print();
+					toast.info("Print dialog opened. Choose Save as PDF.");
+				} finally {
+					setTimeout(() => {
+						URL.revokeObjectURL(blobUrl);
+						iframe.remove();
+					}, 800);
+				}
+			};
+			iframe.src = blobUrl;
 		}
 		if (type === "gdocs") {
 			navigator.clipboard
@@ -547,6 +569,11 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 						}}
 						onEditorReady={(editor) => {
 							editorRef.current = editor;
+						}}
+						pageSize={pageSize}
+						onPageSizeChange={(nextSize) => {
+							setPageSize(nextSize);
+							localStorage.setItem("editorPageSize", nextSize);
 						}}
 									onSelectionChange={(selection) => {
 										handleSelectionChange(selection);

@@ -983,8 +983,64 @@ body {
 .main-editor-column .editor-card {
 	padding: 56px 72px;
 	min-height: calc(100vh - 230px);
-	background: var(--bg-surface);
+	background: #eef1f5;
 	box-shadow: var(--shadow-md);
+}
+
+html.dark .main-editor-column .editor-card {
+	background: #111827;
+}
+
+.editor-frame-header {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+.editor-frame-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-secondary);
+}
+
+.editor-page-frame {
+	margin: 0 auto;
+	position: relative;
+	background: #ffffff;
+	border: 1px solid #d1d5db;
+	box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+	padding: 18px 20px;
+	transition: width 180ms ease;
+}
+
+html.dark .editor-page-frame {
+	background: #0f172a;
+	border-color: #374151;
+	box-shadow: none;
+}
+
+.editor-page-frame.page-size-fluid {
+	max-width: 800px;
+	width: min(100%, 800px);
+	min-height: 58vh;
+}
+
+.editor-page-frame.page-size-a4 {
+	width: min(100%, 794px);
+	min-height: 1123px;
+}
+
+.editor-page-frame.page-size-letter {
+	width: min(100%, 816px);
+	min-height: 1056px;
+}
+
+.main-editor-column {
+	max-width: 980px;
+	width: 100%;
+	margin: 0 auto;
 }
 
 .word-count-bar {
@@ -1591,6 +1647,12 @@ body {
 	.right-sidebar { display: none; }
 	.main-editor-column .toolbar { overflow-x: auto; }
 	.main-editor-column .editor-card { padding: 24px 20px; }
+	.editor-page-frame.page-size-a4,
+	.editor-page-frame.page-size-letter,
+	.editor-page-frame.page-size-fluid {
+		width: 100%;
+		min-height: 58vh;
+	}
 	.status-bar { font-size: 10px; }
 }
 

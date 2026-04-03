@@ -79,6 +79,41 @@ app.get("/health", async (_req, res) => {
 app.use("/api/documents", documentRoutes);
 app.use("/api/revisions", revisionsRoutes);
 
+const extractBodyHtml = (rawHtml) => {
+	const source = String(rawHtml || "");
+	const bodyMatch = source.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+	const content = bodyMatch ? bodyMatch[1] : source;
+
+	const cleaned = content
+		.replace(/<!--([\s\S]*?)-->/g, "")
+		.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+		.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+		.replace(/<(iframe|object|embed|link|meta|noscript)[^>]*>[\s\S]*?<\/\1>/gi, "")
+		.replace(/<(iframe|object|embed|link|meta|noscript)[^>]*\/?\s*>/gi, "")
+		.replace(/\sclass="[^"]*"/gi, "")
+		.replace(/\sid="[^"]*"/gi, "")
+		.replace(/\sstyle="[^"]*"/gi, "")
+		.trim();
+
+	return cleaned || "<p></p>";
+};
+
+const textToParagraphHtml = (rawText) => {
+	const safe = String(rawText || "")
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+
+	const html = safe
+		.split(/\n\n+/)
+		.map((chunk) => chunk.trim())
+		.filter(Boolean)
+		.map((chunk) => `<p>${chunk.replace(/\n/g, "<br />")}</p>`)
+		.join("");
+
+	return html || "<p></p>";
+};
+
 app.post("/api/import/gdocs", async (req, res, next) => {
 	try {
 		const { docId } = req.body || {};
@@ -87,17 +122,34 @@ app.post("/api/import/gdocs", async (req, res, next) => {
 		}
 
 		const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=html`;
-		const response = await fetch(exportUrl);
+		const response = await fetch(exportUrl, {
+			headers: {
+				"User-Agent": "Mozilla/5.0",
+				Accept: "text/html,application/xhtml+xml"
+			}
+		});
 		if (!response.ok) {
 			throw new Error("Could not fetch Google Doc. Check sharing settings.");
 		}
 
 		const html = await response.text();
-		const cleaned = html
-			.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-			.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-			.replace(/\sclass="[^"]*"/gi, "")
-			.replace(/\sid="[^"]*"/gi, "");
+		const looksBlocked = /accounts\.google\.com|Sign in|ServiceLogin/i.test(html || "");
+		let cleaned = extractBodyHtml(html);
+
+		if (looksBlocked || cleaned === "<p></p>") {
+			const txtUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
+			const txtResponse = await fetch(txtUrl, {
+				headers: {
+					"User-Agent": "Mozilla/5.0",
+					Accept: "text/plain,text/*;q=0.9,*/*;q=0.8"
+				}
+			});
+			if (!txtResponse.ok) {
+				throw new Error("Could not fetch Google Doc. Set sharing to Anyone with link can view.");
+			}
+			const txt = await txtResponse.text();
+			cleaned = textToParagraphHtml(txt);
+		}
 
 		return res.json({ success: true, html: cleaned });
 	} catch (error) {
