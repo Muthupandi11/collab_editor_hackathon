@@ -12,6 +12,32 @@ const roomTitles = new Map();
 const roomTyping = new Map();
 const roomChats = new Map();
 const roomReactions = new Map();
+const pendingDisconnects = new Map();
+const REFRESH_GRACE_MS = 8000;
+
+/**
+ * Converts Socket.IO binary payloads to Uint8Array safely.
+ * @param {unknown} raw - Raw incoming payload.
+ * @returns {Uint8Array}
+ */
+function toUint8Array(raw) {
+	if (raw instanceof Uint8Array) {
+		return raw;
+	}
+
+	if (Array.isArray(raw)) {
+		return new Uint8Array(raw);
+	}
+
+	if (raw && typeof raw === "object") {
+		const maybeBuffer = /** @type {{ data?: number[], type?: string }} */ (raw);
+		if (Array.isArray(maybeBuffer.data)) {
+			return new Uint8Array(maybeBuffer.data);
+		}
+	}
+
+	return new Uint8Array();
+}
 
 /**
  * Returns an existing room or creates a new in-memory room.
@@ -101,6 +127,13 @@ export function registerCollaborationSocket(io) {
 			socket.data.user = resolvedUser;
 			socket.join(documentId);
 
+			const userKey = `${documentId}:${resolvedUser.id || resolvedUser.name || socket.id}`;
+			const pending = pendingDisconnects.get(userKey);
+			if (pending) {
+				clearTimeout(pending.timeout);
+				pendingDisconnects.delete(userKey);
+			}
+
 			const room = getOrCreateRoom(documentId);
 			room.clients.add(socket.id);
 
@@ -112,7 +145,7 @@ export function registerCollaborationSocket(io) {
 			});
 
 			const stateUpdate = Y.encodeStateAsUpdate(room.doc);
-			socket.emit("document-state", stateUpdate);
+			socket.emit("document-state", Array.from(stateUpdate));
 
 			const awarenessClients = Array.from(room.awareness.getStates().entries()).map(
 				([clientId, state]) => ({ clientId, state })
@@ -136,10 +169,16 @@ export function registerCollaborationSocket(io) {
 			}
 
 			const room = getOrCreateRoom(documentId);
-			const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
+			const payload = toUint8Array(update);
+			if (payload.length === 0) {
+				if (typeof ack === "function") {
+					ack({ ok: false, message: "Invalid update payload" });
+				}
+				return;
+			}
 
 			Y.applyUpdate(room.doc, payload);
-			socket.to(documentId).emit("yjs-update", payload);
+			socket.to(documentId).emit("yjs-update", Array.from(payload));
 
 			if (typeof ack === "function") {
 				ack({ ok: true, receivedAt: Date.now() });
@@ -152,7 +191,10 @@ export function registerCollaborationSocket(io) {
 			}
 
 			const room = getOrCreateRoom(documentId);
-			const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
+			const payload = toUint8Array(update);
+			if (payload.length === 0) {
+				return;
+			}
 
 			if (Number.isInteger(clientId)) {
 				socket.data.awarenessClientIds.add(clientId);
@@ -383,21 +425,29 @@ export function registerCollaborationSocket(io) {
 				return;
 			}
 
-			const room = rooms.get(documentId);
-			if (!room) {
-				return;
-			}
+			const user = socket.data.user || {};
+			const userKey = `${documentId}:${user.id || user.name || socket.id}`;
+			const timeout = setTimeout(() => {
+				pendingDisconnects.delete(userKey);
 
-			room.clients.delete(socket.id);
-			const awarenessIds = Array.from(socket.data.awarenessClientIds || []);
-			if (awarenessIds.length > 0) {
-				awarenessProtocol.removeAwarenessStates(room.awareness, awarenessIds, socket.id);
+				const room = rooms.get(documentId);
+				if (!room) {
+					return;
+				}
+
+				room.clients.delete(socket.id);
+				const awarenessIds = Array.from(socket.data.awarenessClientIds || []);
+				if (awarenessIds.length > 0) {
+					awarenessProtocol.removeAwarenessStates(room.awareness, awarenessIds, socket.id);
 					const payload = awarenessProtocol.encodeAwarenessUpdate(room.awareness, awarenessIds);
-					socket.to(documentId).emit("awareness-update", payload);
-			}
+					socket.to(documentId).emit("awareness-update", Array.from(payload));
+				}
 
-			cleanupRoomIfEmpty(documentId);
-			logInfo("Socket disconnected", { socketId: socket.id, documentId });
+				cleanupRoomIfEmpty(documentId);
+				logInfo("Socket disconnected", { socketId: socket.id, documentId });
+			}, REFRESH_GRACE_MS);
+
+			pendingDisconnects.set(userKey, { timeout, socketId: socket.id, documentId });
 		});
 	});
 }

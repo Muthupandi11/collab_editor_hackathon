@@ -37,6 +37,30 @@ function buildUsersFromAwareness(awareness) {
 }
 
 /**
+ * Decodes Socket.IO binary payloads into Uint8Array safely.
+ * @param {unknown} raw
+ * @returns {Uint8Array}
+ */
+function decodeBinaryPayload(raw) {
+	if (raw instanceof Uint8Array) {
+		return raw;
+	}
+
+	if (Array.isArray(raw)) {
+		return new Uint8Array(raw);
+	}
+
+	if (raw && typeof raw === "object") {
+		const maybeBuffer = /** @type {{ data?: number[] }} */ (raw);
+		if (Array.isArray(maybeBuffer.data)) {
+			return new Uint8Array(maybeBuffer.data);
+		}
+	}
+
+	return new Uint8Array();
+}
+
+/**
  * Manages Yjs and awareness synchronization for a document room.
  * @param {{ documentId: string, currentUser: { name: string, color: string } }} params - Hook parameters.
  * @returns {{ ydoc: Y.Doc, awareness: Awareness, ready: boolean, onlineUsers: Array<{ id: number, name: string, color: string, isSelf: boolean }> }}
@@ -144,7 +168,10 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		const handleRemoteYjsUpdate = (update) => {
 			try {
-				const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
+				const payload = decodeBinaryPayload(update);
+				if (payload.length === 0) {
+					return;
+				}
 				Y.applyUpdate(ydoc, payload, "remote");
 			} catch {
 				setConnectionMessage("Sync error. Reconnecting...");
@@ -176,7 +203,10 @@ export function useCollaboration({ documentId, currentUser }) {
 
 		const handleRemoteAwarenessUpdate = (update) => {
 			try {
-				const payload = update instanceof Uint8Array ? update : new Uint8Array(update);
+				const payload = decodeBinaryPayload(update);
+				if (payload.length === 0) {
+					return;
+				}
 				applyAwarenessUpdate(awareness, payload, "remote");
 				pushAwarenessList();
 			} catch {

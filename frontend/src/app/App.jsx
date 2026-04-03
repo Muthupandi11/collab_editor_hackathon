@@ -77,16 +77,6 @@ export default function App() {
 		setShowJoinModal(false);
 	};
 
-	useEffect(() => {
-		const handleBeforeUnload = () => {
-			sessionStorage.removeItem("collab_username");
-			sessionStorage.removeItem("collab_color");
-		};
-
-		window.addEventListener("beforeunload", handleBeforeUnload);
-		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-	}, []);
-
 	return (
 		<>
 			{showJoinModal ? (
