@@ -50,9 +50,7 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		sendChatMessage,
 		reactToMessage,
 		remoteCursors,
-		remoteTextChange,
 		reportCursorMove,
-		emitTextChange,
 		updateCursorSelection,
 		forceSave
 	} = useCollaboration({ documentId, currentUser: collaborationUser });
@@ -76,7 +74,6 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 	const [localSelection, setLocalSelection] = useState({ from: 1, to: 1 });
 	const [pageSize, setPageSize] = useState(() => localStorage.getItem("editorPageSize") || "a4");
 	const [isImporting, setIsImporting] = useState(false);
-	const lastRemoteContentRef = useRef("");
 
 	const parseJsonSafely = async (response, url) => {
 		const contentType = response.headers.get("content-type") || "";
@@ -309,29 +306,6 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 		loadRevisions();
 		toast.info("Document updated from a restored version");
 	}, [documentRestoreTick, loadDocument, loadRevisions, ready]);
-
-	useEffect(() => {
-		if (!remoteTextChange?.content) {
-			return;
-		}
-
-		if (!editorRef.current || editorRef.current.isDestroyed || isImporting) {
-			return;
-		}
-
-		const incoming = remoteTextChange.content;
-		const current = editorRef.current.getHTML();
-		if (current === incoming || lastRemoteContentRef.current === incoming) {
-			return;
-		}
-
-		try {
-			safeSetContent(editorRef.current, incoming);
-			lastRemoteContentRef.current = incoming;
-		} catch (error) {
-			console.warn("Failed to apply remote text-change fallback:", error?.message || error);
-		}
-	}, [isImporting, remoteTextChange]);
 
 	useEffect(() => {
 		const interval = setInterval(async () => {
@@ -685,9 +659,6 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 						onPlainTextChange={(text) => {
 							setEditorText(text);
 							hasUnsavedChanges.current = true;
-							if (!isImporting && editorRef.current && !editorRef.current.isDestroyed) {
-								emitTextChange(editorRef.current.getHTML());
-							}
 						}}
 						onEditorReady={(editor) => {
 							editorRef.current = editor;

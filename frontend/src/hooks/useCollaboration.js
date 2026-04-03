@@ -89,7 +89,6 @@ export function useCollaboration({ documentId, currentUser }) {
 	const [chatMessages, setChatMessages] = useState([]);
 	const [remoteCursors, setRemoteCursors] = useState([]);
 	const [documentRestoreTick, setDocumentRestoreTick] = useState(0);
-	const [remoteTextChange, setRemoteTextChange] = useState(null);
 
 	const startRetryCountdown = (seconds) => {
 		if (retryCountdownRef.current) {
@@ -296,23 +295,6 @@ export function useCollaboration({ documentId, currentUser }) {
 			setOnlineUsers((prev) => prev.filter((entry) => String(entry.userId || entry.id) !== String(userId)));
 		};
 
-		const handleTextChange = ({ content, roomId }) => {
-			if (typeof content !== "string" || !content.trim()) {
-				return;
-			}
-			if (roomId && String(roomId).trim() !== normalizedRoomId) {
-				return;
-			}
-			setRemoteTextChange({ content, roomId: roomId || normalizedRoomId, at: Date.now() });
-		};
-
-		const handleDocumentContent = ({ content }) => {
-			if (typeof content !== "string" || !content.trim()) {
-				return;
-			}
-			setRemoteTextChange({ content, roomId: normalizedRoomId, at: Date.now() });
-		};
-
 		const handleDisconnect = () => {
 			setReady(false);
 			setConnectionStatus("offline");
@@ -487,8 +469,6 @@ export function useCollaboration({ documentId, currentUser }) {
 		socket.on("users-list", handleUsersList);
 		socket.on("user-joined", handleUserJoined);
 		socket.on("user-left", handleUserLeft);
-		socket.on("text-change", handleTextChange);
-		socket.on("document-content", handleDocumentContent);
 
 		socket.on("document-state", handleRemoteYjsUpdate);
 		socket.on("yjs-update", handleRemoteYjsUpdate);
@@ -530,8 +510,6 @@ export function useCollaboration({ documentId, currentUser }) {
 			socket.off("users-list", handleUsersList);
 			socket.off("user-joined", handleUserJoined);
 			socket.off("user-left", handleUserLeft);
-			socket.off("text-change", handleTextChange);
-			socket.off("document-content", handleDocumentContent);
 			socket.disconnect();
 			socketRef.current = null;
 			debouncedEmitUpdate.cancel();
@@ -697,23 +675,6 @@ export function useCollaboration({ documentId, currentUser }) {
 	}
 
 	/**
-	 * Fallback HTML synchronization channel.
-	 * @param {string} content
-	 */
-	function emitTextChange(content) {
-		if (!socketRef.current?.connected || typeof content !== "string" || !content.trim()) {
-			return;
-		}
-
-		socketRef.current.emit("text-change", {
-			content,
-			roomId: normalizedRoomId,
-			userId: currentUser.id,
-			username: currentUser.name
-		});
-	}
-
-	/**
 	 * Stores the current text selection in awareness so collaboration cursors render.
 	 * @param {{ from: number, to: number }} selection - Current editor selection.
 	 * @returns {void}
@@ -808,7 +769,6 @@ export function useCollaboration({ documentId, currentUser }) {
 		onlineUsers,
 		chatMessages,
 		remoteCursors,
-		remoteTextChange,
 		documentRestoreTick,
 		notifyTyping,
 		updateDocumentTitle,
@@ -817,7 +777,6 @@ export function useCollaboration({ documentId, currentUser }) {
 		sendChatMessage,
 		reactToMessage,
 		reportCursorMove,
-		emitTextChange,
 		forceSave,
 		requestRevisionRestore,
 		updateCursorSelection
