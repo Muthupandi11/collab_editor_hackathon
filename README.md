@@ -1,7 +1,7 @@
 # CollabEditor - Real-time Collaborative Text Editor
 
 CollabEditor is a Google Docs-like collaborative editor built for hackathon delivery.
-It supports multi-user editing, presence, revision history, chat, and import/export workflows.
+It supports multi-user editing, presence, revision history, chat, TXT-only import, and multi-format export workflows.
 
 ## Problem Description
 
@@ -124,7 +124,7 @@ scripts/    Utility scripts
 - mammoth `^1.12.0`
 - multer `^2.1.1`
 - node-fetch `^3.3.2`
-- pdf-parse `^2.4.5`
+- pdf-parse `^1.1.1`
 - yjs `^13.6.18`
 - y-protocols `^1.0.6`
 
