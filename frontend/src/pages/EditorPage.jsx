@@ -13,6 +13,7 @@ import ImportModal from "../components/editor/ImportModal.jsx";
 import { getBackendBaseUrl } from "../services/backendUrl.js";
 
 const BACKEND_URL = getBackendBaseUrl();
+const MAX_IMPORT_HTML_LENGTH = 180000;
 
 /**
  * Document editor page.
@@ -122,7 +123,22 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			});
 
 			const html = (root.innerHTML || "").trim();
-			return html || fallback;
+			if (!html) {
+				return fallback;
+			}
+			if (html.length > MAX_IMPORT_HTML_LENGTH) {
+				const plain = (root.textContent || "").trim();
+				if (!plain) {
+					return fallback;
+				}
+				return plain
+					.split(/\n\n+/)
+					.map((chunk) => chunk.trim())
+					.filter(Boolean)
+					.map((chunk) => `<p>${chunk.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`)
+					.join("") || fallback;
+			}
+			return html;
 		} catch {
 			return fallback;
 		}
@@ -349,17 +365,27 @@ export default function EditorPage({ documentId, currentUser, onRequestIdentityE
 			}
 			const safeHtml = normalizeImportContent(html);
 			await saveDocument();
+
+			let applied = false;
 			try {
 				editorRef.current.commands.setContent(safeHtml, false);
+				applied = true;
 			} catch {
-				const plain = editorRef.current
-					.getTextFromHTML?.(safeHtml)
-					|| safeHtml.replace(/<[^>]+>/g, " ");
-				editorRef.current.commands.setContent(normalizeImportContent(plain), false);
+				try {
+					const plain = safeHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+					editorRef.current.commands.setContent(normalizeImportContent(plain), false);
+					applied = true;
+				} catch {
+					editorRef.current.commands.setContent("<p>Import failed for this file format. Please try a smaller file.</p>", false);
+				}
 			}
+
+			if (!applied) {
+				throw new Error("Could not apply imported content to editor.");
+			}
+
 			hasUnsavedChanges.current = true;
-			await forceSave();
-			await saveDocument();
+			await Promise.allSettled([forceSave(), saveDocument()]);
 			toast.success(`${source} imported and synced to all users`);
 		},
 		[forceSave, saveDocument]

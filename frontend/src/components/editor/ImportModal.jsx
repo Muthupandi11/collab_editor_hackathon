@@ -65,6 +65,22 @@ function normalizeImportedHtml(input) {
 	}
 }
 
+function htmlToSafeTextHtml(input) {
+	const raw = String(input || "").trim();
+	if (!raw) {
+		return "<p></p>";
+	}
+
+	try {
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(raw, "text/html");
+		const plain = (doc.body?.textContent || doc.documentElement?.textContent || "").trim();
+		return toParagraphHtml(plain);
+	} catch {
+		return toParagraphHtml(raw.replace(/<[^>]+>/g, " "));
+	}
+}
+
 function extractGoogleDocId(value) {
 	const text = String(value || "").trim();
 	if (!text) {
@@ -131,7 +147,7 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			setStatus("converting");
 			const html = normalizeImportedHtml(toParagraphHtml(text));
 			setStatus("loading");
-			await onImport({ html, source: file.name });
+			await onImport({ html: html === "<p></p>" ? htmlToSafeTextHtml(text) : html, source: file.name });
 			onClose();
 		} catch (importError) {
 			setError(importError?.message || "Could not read file. Is it a valid PDF?");
@@ -167,6 +183,9 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			if (html === "<p></p>") {
 				const textResult = await mammoth.extractRawText({ arrayBuffer });
 				html = normalizeImportedHtml(textResult.value || "");
+			}
+			if (html === "<p></p>") {
+				html = htmlToSafeTextHtml(result.value || "");
 			}
 			if (html === "<p></p>") {
 				throw new Error("Could not extract readable text from this DOCX file.");
@@ -208,7 +227,14 @@ export default function ImportModal({ open, backendUrl, onClose, onImport }) {
 			}
 			const html = normalizeImportedHtml(data.html);
 			if (html === "<p></p>") {
-				throw new Error("No readable content returned from Google Docs.");
+				const plainFallback = htmlToSafeTextHtml(data.html || "");
+				if (plainFallback === "<p></p>") {
+					throw new Error("No readable content returned from Google Docs.");
+				}
+				setStatus("loading");
+				await onImport({ html: plainFallback, source: "Google Docs" });
+				onClose();
+				return;
 			}
 			setStatus("loading");
 			await onImport({ html, source: "Google Docs" });
